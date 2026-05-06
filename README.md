@@ -58,3 +58,4 @@ Ensure you have Python 3.10+, Git, and an active CUDA environment for GPU accele
 ```bash
 git clone [https://github.com/yourusername/drive-iq.git](https://github.com/yourusername/drive-iq.git)
 cd drive-iq
+sa
