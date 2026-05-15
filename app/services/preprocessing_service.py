@@ -1,0 +1,1 @@
+# Image preprocessing service placeholder.

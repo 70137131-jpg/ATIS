@@ -1,0 +1,1 @@
+# JSON/AJAX routes placeholder.

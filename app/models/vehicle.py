@@ -1,0 +1,1 @@
+# Vehicle model placeholder.
