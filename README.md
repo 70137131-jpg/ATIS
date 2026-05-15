@@ -38,6 +38,7 @@ Not implemented yet:
 - Image processing: OpenCV, NumPy, Pillow
 - AI model: TensorFlow/Keras CNN with mock classifier fallback
 - Charts: Chart.js
+- Environment config: Python-dotenv
 
 ## Repository Structure
 
@@ -77,3 +78,59 @@ The MVP will prioritize:
 - Basic reports with charts
 
 ATIS is a decision-support tool for human review. It does not automatically issue fines or replace manual safety inspection.
+
+## Local Setup
+
+These commands are for Windows PowerShell from the repository root.
+
+Create a virtual environment:
+
+```powershell
+python -m venv .venv
+```
+
+Activate the virtual environment:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Install dependencies:
+
+```powershell
+pip install -r requirements.txt
+```
+
+Create a local environment file when configuration is added:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+If `.env.example` does not exist yet, create `.env` later when the Flask config is implemented. Never commit `.env`.
+
+## Running The Flask App
+
+The app is still a scaffold, so it is not runnable yet. After the Flask app factory is implemented, the expected local command will be:
+
+```powershell
+flask --app run run --debug
+```
+
+If `run.py` is later configured as an executable entry point, this may also work:
+
+```powershell
+python run.py
+```
+
+## Basic Git Workflow
+
+Use feature branches instead of committing directly to `main`.
+
+```powershell
+git switch dev
+git pull origin dev
+git switch -c feature/example-name
+```
+
+See [DEVOPS.md](DEVOPS.md) for the full branch strategy, prompt-to-branch mapping, before-push checklist, merge rules, and Git command examples.
