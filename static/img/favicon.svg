@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="8" fill="#10291f"/>
+  <rect y="47" width="64" height="6" fill="#f4c542"/>
+  <text x="50%" y="43%" dominant-baseline="central" text-anchor="middle" fill="#fff" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="800">NHA</text>
+</svg>

@@ -1,66 +1,38 @@
 import os
-from ultralytics import YOLO
+
+from atis_inference import classify_tyre_image, find_model_path
 
 def test_tyre_safety(image_path):
     """
     Runs inference using the trained ATIS classification model to predict tire safety.
     """
-    # Define possible weight locations relative to the running environment
-    possible_paths = [
-        r"runs\classify\ATIS_Project\tyre_safety_model\weights\best.pt",
-        r"runs\classify\train\weights\best.pt",
-        r"ATIS_Project\tyre_safety_model\weights\best.pt"
-    ]
-    
-    weights_path = None
-    for path in possible_paths:
-        if os.path.exists(path):
-            weights_path = path
-            break
-            
-    if not weights_path:
+    weights_path = find_model_path()
+    if weights_path is None:
         print("Error: Model weights (best.pt) not found anywhere in your runs directory.")
         print("Please verify your training finished successfully without errors.")
         return
-        
-    # Load your custom trained model
-    model = YOLO(weights_path)
     
     print(f"Analyzing tire image: {image_path}")
     print(f"Using model weights from: {weights_path}")
     print("-" * 50)
     
-    # Run prediction (verbose=False keeps the console clean)
-    results = model(image_path, verbose=False)
+    prediction = classify_tyre_image(image_path, weights_path)
+    predicted_class = prediction["predicted_class"]
+    confidence = prediction["confidence"]
     
-    # Extract and display the prediction data
-    for result in results:
-        top_class_id = result.probs.top1
-        confidence = result.probs.top1conf.item()
-        predicted_class = result.names[top_class_id]
+    print("\n=== ATIS DIAGNOSTIC REPORT ===")
+    print(f"Detected Condition                : {predicted_class.upper()}")
+    print(f"Confidence Score                  : {confidence:.2f}%")
+    print("-" * 46)
+    
+    if prediction["status"] == "safe":
+        print("VERDICT: ELIGIBLE FOR HIGHWAY TRAVEL.")
+        print("Status : Green - The tire texture shows no critical surface defects.")
+    else:
+        print("VERDICT: NOT ELIGIBLE FOR HIGHWAY TRAVEL.")
+        print("Status : Red - Structural cracking or dangerous degradation detected.")
         
-        print("\n=== ATIS DIAGNOSTIC REPORT ===")
-        # DEBUGGING CRITICAL INFO: This reveals how the folders were mapped by Ultralytics
-        print(f"DEBUG - Full Model Class Mapping : {result.names}")
-        print(f"DEBUG - Predicted Class ID        : {top_class_id}")
-        print("-" * 46)
-        print(f"Detected Condition                : {predicted_class.upper()}")
-        print(f"Confidence Score                  : {confidence * 100:.2f}%")
-        print("-" * 46)
-        
-        # FYP Decision Logic Automation
-        # We enforce strict lowercase stripping to match string outputs exactly
-        if str(predicted_class).strip().lower() == 'normal':
-            print("VERDICT: ELIGIBLE FOR HIGHWAY TRAVEL.")
-            print("Status : Green - The tire texture shows no critical surface defects.")
-        elif str(predicted_class).strip().lower() == 'cracked':
-            print("VERDICT: NOT ELIGIBLE FOR HIGHWAY TRAVEL.")
-            print("Status : Red - Structural cracking or dangerous degradation detected.")
-        else:
-            print("VERDICT: UNKNOWN CLASS DETECTED.")
-            print(f"Status : Orange - Unexpected folder class output: {predicted_class}")
-            
-        print("=============================================\n")
+    print("=============================================\n")
 
 if __name__ == "__main__":
     # Target your sample image directly in the ATIS folder.

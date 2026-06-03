@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- 
+    Dashboard Template (index.html)
+    This is the main page of the application that shows the overview stats and recent inspections.
+    It extends the structure of a standard HTML5 page.
+-->
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="NHA Dashboard — Real-time highway inspection monitoring">
+    <title>NHA — Dashboard</title>
+
+    <!-- Google Fonts for better typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Link to our main stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+</head>
+
+<body>
+    <div class="layout">
+
+        <!-- ================================================================== -->
+        <!-- SIDEBAR NAVIGATION                                                 -->
+        <!-- ================================================================== -->
+        <aside class="sidebar" id="sidebar">
+            <!-- Brand / Logo Area -->
+            <div class="sidebar-brand">
+                <div class="sidebar-logo">NHA</div>
+                <div class="sidebar-brand-text">
+                    <span class="sidebar-title">NHA</span>
+                    <span class="sidebar-subtitle">Highway Inspection</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section-label">MAIN</div>
+
+            <!-- Navigation Links -->
+            <nav class="sidebar-nav">
+                <!-- Dashboard Link (Active) -->
+                <a href="{{ url_for('dashboard') }}" class="nav-item active" id="nav-dashboard">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7" />
+                        <rect x="14" y="3" width="7" height="7" />
+                        <rect x="14" y="14" width="7" height="7" />
+                        <rect x="3" y="14" width="7" height="7" />
+                    </svg>
+                    <span>Dashboard</span>
+                </a>
+
+                <!-- New Inspection Link -->
+                <a href="{{ url_for('new_inspection') }}" class="nav-item" id="nav-inspect">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="16" />
+                        <line x1="8" y1="12" x2="16" y2="12" />
+                    </svg>
+                    <span>New Inspection</span>
+                </a>
+
+                <!-- Alerts Link -->
+                <a href="{{ url_for('alerts') }}" class="nav-item" id="nav-alerts">
+                    <div class="nav-item-content">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path
+                                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                            <line x1="12" y1="9" x2="12" y2="13" />
+                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                        </svg>
+                        <span>Alerts</span>
+                    </div>
+                    <!-- Show badge if there are pending alerts -->
+                    {% if stats.pending_alerts > 0 %}
+                    <span class="nav-badge">{{ stats.pending_alerts }}</span>
+                    {% endif %}
+                </a>
+
+                <!-- History Link -->
+                <a href="{{ url_for('history') }}" class="nav-item" id="nav-history">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span>History</span>
+                </a>
+
+                <!-- Reports Link -->
+                <a href="{{ url_for('reports') }}" class="nav-item" id="nav-reports">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                        <polyline points="10 9 9 9 8 9" />
+                    </svg>
+                    <span>Reports</span>
+                </a>
+            </nav>
+
+            <button class="sidebar-collapse" id="sidebar-collapse">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                </svg>
+                <span>Collapse</span>
+            </button>
+        </aside>
+
+        <!-- ================================================================== -->
+        <!-- MAIN CONTENT AREA                                                  -->
+        <!-- ================================================================== -->
+        <div class="main-area">
+
+            <!-- Top Navigation Bar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <div class="status-indicator">
+                        <span class="status-dot"></span>
+                        <span class="status-text">NHA Secure Network</span>
+                    </div>
+                </div>
+
+                <div class="topbar-right">
+                    <!-- Notification Bell & Dropdown -->
+                    <div class="notification-wrapper">
+                        <button class="topbar-icon-btn notification-btn" id="notification-toggle"
+                            aria-label="Notifications">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                            </svg>
+                            {% if stats.pending_alerts > 0 %}
+                            <span class="notification-badge">{{ pending_alert_count }}</span>
+                            {% endif %}
+                        </button>
+
+                        <!-- Notification Dropdown Panel -->
+                        <div class="notification-dropdown" id="notification-dropdown">
+                            <div class="notif-header">
+                                <span class="notif-title">Recent Alerts</span>
+                                <a href="{{ url_for('alerts') }}" class="notif-view-all">View all</a>
+                            </div>
+                            <ul class="notif-list">
+                                {% if recent_alerts %}
+                                {% for a in recent_alerts %}
+                                <li class="notif-item">
+                                    <a href="{{ url_for('alerts') }}" class="notif-link">
+                                        <div
+                                            class="notif-dot {{ 'escalated' if a.status == 'escalated' else 'warning' }}">
+                                        </div>
+                                        <div class="notif-content">
+                                            <div class="notif-main">{{ a.inspection.location[:25] }}</div>
+                                            <div class="notif-sub">{{ a.inspection.plate or 'Unknown' }} &bull; {{
+                                                a.created_at.strftime('%I:%M %p') }}</div>
+                                        </div>
+                                    </a>
+                                </li>
+                                {% endfor %}
+                                {% else %}
+                                <li class="notif-empty">No new alerts</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- User Profile section -->
+                    <div class="topbar-user">
+                        <div class="user-avatar">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                            </svg>
+                        </div>
+                        <div class="user-info">
+                            <span class="user-name">{{ role }} User</span>
+                            <span class="user-role">{{ role }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Logout Button -->
+                    <a href="{{ url_for('logout') }}" class="topbar-icon-btn" aria-label="Sign out" title="Sign out">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                            <polyline points="16 17 21 12 16 7" />
+                            <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
+                    </a>
+                </div>
+            </header>
+
+            <!-- Dashboard Content -->
+            <main class="content">
+                <div class="page-header">
+                    <div>
+                        <span class="official-kicker">NHA Operations</span>
+                        <h1 class="page-title">Inspection Command Dashboard</h1>
+                        <p class="page-subtitle">Real-time highway checkpoint status and vehicle safety feed</p>
+                    </div>
+                    <a href="{{ url_for('reports') }}" class="details-btn">
+                        <span class="btn-label">Export Report</span>
+                    </a>
+                </div>
+
+                <!-- Statistics Cards Grid -->
+                <!-- We calculate these numbers in app.py and pass them as 'stats' -->
+                <div class="stats-grid">
+                    <!-- Total Count -->
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-label">Total Inspections</span>
+                            <div class="stat-icon stat-icon-blue">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path
+                                        d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                                    </path>
+                                    <polyline points="7.5 4.21 12 6.81 16.5 4.21"></polyline>
+                                    <polyline points="7.5 19.79 7.5 14.6 3 12"></polyline>
+                                    <polyline points="21 12 16.5 14.6 16.5 19.79"></polyline>
+                                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="stat-value">{{ stats.total }}</div>
+                        <div class="stat-detail">Vehicles scanned today</div>
+                    </div>
+
+                    <!-- Safe Count -->
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-label">Safe Vehicles</span>
+                            <div class="stat-icon stat-icon-green">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="stat-value">{{ stats.safe }}</div>
+                        <div class="stat-detail">{{ stats.pass_rate }}% pass rate</div>
+                    </div>
+
+                    <!-- Unsafe Count -->
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-label">Unsafe Detected</span>
+                            <div class="stat-icon stat-icon-red">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path
+                                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+                                    </path>
+                                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="stat-value">{{ stats.unsafe }}</div>
+                        <div class="stat-detail">{{ stats.pending_alerts }} pending alerts</div>
+                    </div>
+
+                    <!-- Average Time -->
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-label">Avg. Processing</span>
+                            <div class="stat-icon stat-icon-purple">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="stat-value">329ms</div>
+                        <div class="stat-detail">Response time</div>
+                    </div>
+                </div>
+
+                <!-- Recent Inspections Table -->
+                <div class="table-card">
+                    <div class="table-header">
+                        <h2 class="table-title">Recent Inspections</h2>
+                        <div class="table-controls">
+                            <!-- Search & Filter Controls -->
+                            <div class="search-box">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="11" cy="11" r="8" />
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                </svg>
+                                <input type="text" placeholder="Filter list..." id="search-plate">
+                            </div>
+                            <!-- Simple dropdown based on status -->
+                            <select class="status-filter" id="status-filter">
+                                <option value="all">All Status</option>
+                                <option value="safe">Safe</option>
+                                <option value="unsafe">Unsafe</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table class="inspection-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>License Plate</th>
+                                    <th>Location</th>
+                                    <th>Status</th>
+                                    <th>Confidence</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inspection-tbody">
+                                <!-- Loop through inspections passed from Flask -->
+                                {% for i in inspections %}
+                                <tr>
+                                    <td class="cell-time">
+                                        <span class="time-main">{{ i.timestamp.strftime('%I:%M:%S %p') }}</span>
+                                        <span class="time-sub">{{ i.timestamp.strftime('%b %d') }}</span>
+                                    </td>
+
+                                    <td class="cell-plate">{{ i.plate or '—' }}</td>
+
+                                    <td class="cell-location">
+                                        <span class="loc-main">{{ i.location }}</span>
+                                        <span class="loc-sub">{{ i.camera or '' }}</span>
+                                    </td>
+
+                                    <!-- Dynamic badge class based on status -->
+                                    <td><span class="badge badge-{{ i.status }}">{{ i.status|capitalize }}</span></td>
+
+                                    <td class="cell-confidence">
+                                        <!-- Confidence bar visual -->
+                                        <div class="confidence-wrap">
+                                            <div class="confidence-bar">
+                                                <div class="confidence-fill {{ i.status }}"
+                                                    style="width:{{ i.confidence }}%">&nbsp;</div>
+                                            </div>
+                                            <span>{{ i.confidence }}%</span>
+                                        </div>
+                                    </td>
+
+                                    <!-- Link to the detail page -->
+                                    <td><a href="{{ url_for('inspection_detail', inspection_id=i.id) }}"
+                                            class="action-link">View</a></td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="6">
+                                        <div class="empty-state">
+                                            <svg width="34" height="34" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                                                stroke-linejoin="round">
+                                                <circle cx="12" cy="12" r="10" />
+                                                <path d="M8 12h8" />
+                                            </svg>
+                                            <div class="empty-title">No inspections recorded</div>
+                                            <p class="empty-copy">New checkpoint scans will appear here once an inspection is submitted.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        <div class="empty-state" id="dashboard-empty-filter" style="display:none;">
+                            <div class="empty-title">No inspections match the current filters</div>
+                            <p class="empty-copy">Clear the plate search or choose another status to review the feed.</p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- JavaScript Files -->
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+
+</html>

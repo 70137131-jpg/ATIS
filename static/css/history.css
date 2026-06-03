@@ -1,0 +1,334 @@
+/* ===== History Page Styles ===== */
+
+/* Export button */
+.btn-export {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font);
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.btn-export.is-loading {
+    cursor: wait;
+    border-color: var(--blue);
+    color: var(--blue);
+}
+
+.btn-export .btn-spinner {
+    border-color: rgba(37, 107, 79, 0.2);
+    border-top-color: var(--blue);
+}
+
+.btn-export:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+}
+
+/* ===== Filters Card ===== */
+.filters-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.filters-row {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.search-input-lg {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+    color: var(--text-muted);
+    transition: border-color var(--transition);
+}
+
+.search-input-lg:focus-within {
+    border-color: var(--blue);
+}
+
+.search-input-lg input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: none;
+    font-family: var(--font);
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+
+.search-input-lg input::placeholder {
+    color: var(--text-muted);
+}
+
+.filter-select {
+    font-family: var(--font);
+    font-size: 0.82rem;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+    color: var(--text-primary);
+    cursor: pointer;
+    outline: none;
+    min-width: 110px;
+    transition: border-color var(--transition);
+}
+
+.filter-select:focus {
+    border-color: var(--blue);
+}
+
+/* Date buttons */
+.date-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.date-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font);
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.45rem 1rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+    border: 1px solid var(--blue);
+    background: var(--blue);
+    color: #fff;
+}
+
+.date-btn:hover {
+    background: #1d563f;
+}
+
+.date-btn-outline {
+    background: var(--white);
+    color: var(--text-primary);
+    border-color: var(--border);
+}
+
+.date-btn-outline:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+    background: var(--white);
+}
+
+/* ===== Results Header ===== */
+.results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.results-title {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.results-count {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--blue);
+}
+
+/* ===== History Table ===== */
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.history-table th {
+    text-align: left;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+/* Column widths — must add up to 100% */
+.history-table th:nth-child(1) {
+    width: 15%;
+}
+
+/* Date & Time */
+.history-table th:nth-child(2) {
+    width: 12%;
+}
+
+/* Plate */
+.history-table th:nth-child(3) {
+    width: 25%;
+}
+
+/* Location */
+.history-table th:nth-child(4) {
+    width: 10%;
+}
+
+/* Status */
+.history-table th:nth-child(5) {
+    width: 26%;
+}
+
+/* Defects */
+.history-table th:nth-child(6) {
+    width: 12%;
+}
+
+/* Confidence */
+
+.history-table td {
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.84rem;
+    vertical-align: middle;
+    height: 56px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-table tbody tr:hover {
+    background: rgba(66, 133, 244, 0.02);
+}
+
+.history-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Cell: Date & Time — use block layout instead of flex to avoid breaking td */
+.history-table .cell-time {
+    white-space: nowrap;
+    line-height: 1.6;
+}
+
+.history-table .cell-time .time-main {
+    display: block;
+    font-weight: 600;
+    font-size: 0.82rem;
+}
+
+.history-table .cell-time .time-sub {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+/* Cell: Plate */
+.history-table .cell-plate {
+    font-weight: 600;
+    font-size: 0.84rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+/* Cell: Location */
+.cell-loc-text {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Badges */
+.history-table .badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.7rem;
+    border-radius: 20px;
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+
+/* Cell: Defects */
+.cell-defects {
+    line-height: 2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.defect-tag {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 500;
+    padding: 0.18rem 0.55rem;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    margin-right: 0.25rem;
+    vertical-align: middle;
+}
+
+.defect-more {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 0.18rem 0.35rem;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 4px;
+    vertical-align: middle;
+}
+
+.cell-defects-plain {
+    color: var(--text-muted);
+    font-size: 0.84rem;
+}
+
+/* Cell: Confidence */
+.cell-conf {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+    .filters-row {
+        flex-direction: column;
+    }
+
+    .date-row {
+        flex-direction: column;
+    }
+
+    .history-table {
+        table-layout: auto;
+    }
+}

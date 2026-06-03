@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}NHA - Page Not Found{% endblock %}
+
+{% block content %}
+<div class="empty-state">
+    <div class="empty-title">Page not found</div>
+    <p class="empty-copy">The requested ATIS page does not exist.</p>
+    <a href="{{ url_for('dashboard') if session.get('user') else url_for('login') }}" class="btn-primary">Return</a>
+</div>
+{% endblock %}
