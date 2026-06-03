@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "source_width": 1280,
+  "source_height": 720,
+  "zones": [
+    {
+      "name": "front_left_tire",
+      "x": 0.08,
+      "y": 0.45,
+      "w": 0.28,
+      "h": 0.35
+    },
+    {
+      "name": "front_right_tire",
+      "x": 0.64,
+      "y": 0.45,
+      "w": 0.28,
+      "h": 0.35
+    }
+  ]
+}

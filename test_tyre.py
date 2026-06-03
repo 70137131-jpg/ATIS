@@ -28,6 +28,12 @@ def test_tyre_safety(image_path):
     if prediction["status"] == "safe":
         print("VERDICT: ELIGIBLE FOR HIGHWAY TRAVEL.")
         print("Status : Green - The tire texture shows no critical surface defects.")
+    elif prediction.get("low_confidence"):
+        print("VERDICT: NOT ELIGIBLE - FLAGGED FOR MANUAL REVIEW.")
+        print(
+            f"Status : Amber - '{predicted_class}' predicted below the "
+            f"{prediction.get('threshold', '?')}% confidence threshold."
+        )
     else:
         print("VERDICT: NOT ELIGIBLE FOR HIGHWAY TRAVEL.")
         print("Status : Red - Structural cracking or dangerous degradation detected.")

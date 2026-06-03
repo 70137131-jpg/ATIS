@@ -8,4 +8,5 @@ __pycache__/
 .pytest_cache/
 static/uploads/*
 !static/uploads/.gitkeep
+config/live_zones.json
 instance/
