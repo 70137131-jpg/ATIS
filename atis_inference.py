@@ -14,6 +14,11 @@ DEFAULT_MODEL_CANDIDATES = (
     "runs/classify/train/weights/best.pt",
 )
 
+# Confidence (top-1 probability) below which a 'normal' prediction is NOT
+# auto-passed as safe. The model is a 2-class softmax, so the winning class is
+# always >= 0.50; a meaningful threshold sits above that.
+DEFAULT_CONF_THRESHOLD = 0.60
+
 _classifier_model = None
 _classifier_path: Path | None = None
 
@@ -37,6 +42,22 @@ def find_model_path() -> Path | None:
         if path.exists():
             return path
     return None
+
+
+def get_conf_threshold() -> float:
+    """Confidence threshold (fraction 0-1) below which a 'normal' tire is not
+    auto-passed. Read from ATIS_CONF_THRESHOLD; tolerates percent form (e.g. 60)
+    and falls back to the default on a missing/invalid value."""
+    raw = os.environ.get("ATIS_CONF_THRESHOLD")
+    if not raw:
+        return DEFAULT_CONF_THRESHOLD
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_CONF_THRESHOLD
+    if value > 1:  # tolerate "60" meaning 60%
+        value = value / 100
+    return min(max(value, 0.0), 1.0)
 
 
 def load_classifier(model_path: str | os.PathLike[str] | None = None) -> Any:
@@ -66,24 +87,36 @@ def _class_name(names: Any, class_id: int) -> str:
     return str(class_id)
 
 
-def _status_for_class(predicted_class: str) -> tuple[str, list[str]]:
+def _status_for_class(
+    predicted_class: str, confidence: float, threshold: float
+) -> tuple[str, list[str]]:
+    """Map a predicted class to a safety status using an asymmetric, fail-safe
+    confidence gate: a tire is only passed as 'safe' when the model is confident
+    it is 'normal'. ``confidence`` is the top-1 probability as a fraction (0-1)."""
     normalized = predicted_class.strip().lower()
-    if normalized == "normal":
-        return "safe", []
-    if normalized == "cracked":
+
+    # Defect classes are unsafe regardless of confidence — never gated.
+    if normalized in {"crack", "cracked", "cracking"}:
         return "unsafe", ["Cracking"]
+    if normalized in {"bulge", "bulged", "sidewall_bulge", "sidewall bulge"}:
+        return "unsafe", ["Bulge"]
+
+    if normalized == "normal":
+        if confidence >= threshold:
+            return "safe", []
+        # Low-confidence 'normal' is not waved through; flag for manual review.
+        return "unsafe", ["Low-confidence normal — manual review"]
 
     # Unknown classifier output should be reviewed instead of silently passed.
     return "unsafe", [f"Unexpected class: {predicted_class}"]
 
 
-def classify_tyre_image(
-    image_path: str | os.PathLike[str],
+def _classify_model_input(
+    model_input: Any,
     model_path: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
-    """Classify a tire image and return normalized ATIS inspection fields."""
     model = load_classifier(model_path)
-    results = model(str(image_path), verbose=False)
+    results = model(model_input, verbose=False)
     if not results:
         raise RuntimeError("ATIS classifier returned no results.")
 
@@ -92,14 +125,33 @@ def classify_tyre_image(
         raise RuntimeError("ATIS classifier did not return classification probabilities.")
 
     class_id = int(result.probs.top1)
-    confidence = float(result.probs.top1conf.item()) * 100
+    conf_fraction = float(result.probs.top1conf.item())
     predicted_class = _class_name(result.names, class_id)
-    status, defects = _status_for_class(predicted_class)
+    threshold = get_conf_threshold()
+    status, defects = _status_for_class(predicted_class, conf_fraction, threshold)
 
     return {
         "status": status,
-        "confidence": max(0, min(100, int(round(confidence)))),
+        "confidence": max(0, min(100, int(round(conf_fraction * 100)))),
         "defects": defects,
         "predicted_class": predicted_class,
+        "threshold": round(threshold * 100),
+        "low_confidence": status == "unsafe" and predicted_class.strip().lower() == "normal",
         "model_path": str(_classifier_path or find_model_path() or ""),
     }
+
+
+def classify_tyre_image(
+    image_path: str | os.PathLike[str],
+    model_path: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    """Classify a tire image path and return normalized ATIS inspection fields."""
+    return _classify_model_input(str(image_path), model_path)
+
+
+def classify_tyre_frame(
+    frame: Any,
+    model_path: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    """Classify an in-memory OpenCV/Numpy frame or crop."""
+    return _classify_model_input(frame, model_path)

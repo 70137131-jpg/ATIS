@@ -1,6 +1,21 @@
 import os
 import shutil
 
+
+def discover_classes(source_dir, splits):
+    """Find class folders present in the source dataset splits."""
+    classes = set()
+    for split in splits:
+        split_path = os.path.join(source_dir, split)
+        if not os.path.isdir(split_path):
+            continue
+        for name in os.listdir(split_path):
+            class_path = os.path.join(split_path, name)
+            if os.path.isdir(class_path):
+                classes.add(name)
+    return sorted(classes)
+
+
 def format_atis_dataset(source_dir, dest_dir):
     """
     Reformats the ATIS dataset structure for Ultralytics YOLO Classification.
@@ -10,7 +25,9 @@ def format_atis_dataset(source_dir, dest_dir):
         'training_data': 'train'
     }
     
-    classes = ['cracked', 'normal']
+    classes = discover_classes(source_dir, folder_mapping.keys())
+    if not classes:
+        raise SystemExit(f"No class folders found under {source_dir}")
     
     os.makedirs(dest_dir, exist_ok=True)
     
