@@ -1,3 +1,5 @@
+import os
+
 from ultralytics import YOLO
 
 def train_atis_classifier():
@@ -12,19 +14,23 @@ def train_atis_classifier():
     
     print("Starting YOLOv11 Classification Training...")
     
-    # Train the model
-    results = model.train(
-        data=dataset_path,
-        epochs=50,          # Adjust based on how quickly the model converges
-        imgsz=224,          # Standard classification input size
-        batch=32,           # Optimized batch size for 8GB VRAM
-        device=0,           # Force CUDA usage (RTX 2070 Super)
-        project="ATIS_Project",
-        name="tyre_safety_model",
-        exist_ok=True
-    )
+    train_args = {
+        "data": dataset_path,
+        "epochs": 50,          # Adjust based on how quickly the model converges
+        "imgsz": 224,          # Standard classification input size
+        "batch": 32,           # Optimized batch size for 8GB VRAM
+        "project": "ATIS_Project",
+        "name": "tyre_safety_model",
+        "exist_ok": True,
+    }
+    device = os.environ.get("YOLO_DEVICE")
+    if device:
+        train_args["device"] = device
     
-    print("Training complete. Weights saved in ATIS_Project/tyre_safety_model/weights/")
+    # Train the model
+    model.train(**train_args)
+    
+    print("Training complete. Weights saved under runs/classify/ATIS_Project/tyre_safety_model/weights/")
 
 if __name__ == "__main__":
     train_atis_classifier()

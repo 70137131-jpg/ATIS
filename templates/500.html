@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}NHA - Server Error{% endblock %}
+
+{% block content %}
+<div class="empty-state">
+    <div class="empty-title">Server error</div>
+    <p class="empty-copy">The ATIS application could not complete this request.</p>
+    <a href="{{ url_for('dashboard') if session.get('user') else url_for('login') }}" class="btn-primary">Return</a>
+</div>
+{% endblock %}
