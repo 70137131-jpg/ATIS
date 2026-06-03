@@ -1,1 +1,11 @@
+.DS_Store
+.env
+.venv/
+venv/
 venv312/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+static/uploads/*
+!static/uploads/.gitkeep
+instance/

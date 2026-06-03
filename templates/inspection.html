@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="NHA — Inspection Detail">
+    <title>NHA — Inspection #{{ inspection.id }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/inspection.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+</head>
+
+<body>
+    <div class="layout">
+        <!-- ===== Sidebar ===== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-logo">NHA</div>
+                <div class="sidebar-brand-text">
+                    <span class="sidebar-title">NHA</span>
+                    <span class="sidebar-subtitle">Highway Inspection</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section-label">MAIN</div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-item" id="nav-dashboard">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7" />
+                        <rect x="14" y="3" width="7" height="7" />
+                        <rect x="14" y="14" width="7" height="7" />
+                        <rect x="3" y="14" width="7" height="7" />
+                    </svg>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{{ url_for('new_inspection') }}" class="nav-item" id="nav-inspect">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="16" />
+                        <line x1="8" y1="12" x2="16" y2="12" />
+                    </svg>
+                    <span>New Inspection</span>
+                </a>
+                <a href="{{ url_for('alerts') }}" class="nav-item" id="nav-alerts">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                        <line x1="12" y1="9" x2="12" y2="13" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    <span>Alerts</span>
+                </a>
+                <a href="{{ url_for('history') }}" class="nav-item" id="nav-history">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span>History</span>
+                </a>
+                <a href="{{ url_for('reports') }}" class="nav-item" id="nav-reports">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                        <polyline points="10 9 9 9 8 9" />
+                    </svg>
+                    <span>Reports</span>
+                </a>
+            </nav>
+
+            <button class="sidebar-collapse" id="sidebar-collapse">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                </svg>
+                <span>Collapse</span>
+            </button>
+        </aside>
+
+        <!-- ===== Main Area ===== -->
+        <div class="main-area">
+            <!-- Top Bar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <a href="{{ url_for('dashboard') }}" class="back-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6" />
+                        </svg>
+                        Back to Dashboard
+                    </a>
+                </div>
+                <div class="topbar-right">
+                    <div class="topbar-user">
+                        <div class="user-avatar">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                            </svg>
+                        </div>
+                        <div class="user-info">
+                            <span class="user-name">{{ role }} User</span>
+                            <span class="user-role">{{ role }}</span>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('logout') }}" class="topbar-icon-btn" aria-label="Sign out" title="Sign out">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                            <polyline points="16 17 21 12 16 7" />
+                            <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
+                    </a>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <main class="content">
+                <!-- Page Header -->
+                <div class="page-header">
+                    <div>
+                        <span class="official-kicker">NHA Case File</span>
+                        <h1 class="page-title">Inspection #{{ inspection.id }}</h1>
+                        <p class="page-subtitle">{{ inspection.timestamp.strftime('%B %d, %Y at %I:%M:%S %p') }}</p>
+                    </div>
+                    <span class="badge-lg badge-{{ inspection.status }}">{{ inspection.status|capitalize }}</span>
+                </div>
+
+                <!-- Uploaded Image (if available) -->
+                {% if inspection.image_path %}
+                <div class="detail-card full-width" style="margin-bottom: 1.25rem;">
+                    <div class="detail-card-header">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                        <span>Uploaded Inspection Image</span>
+                    </div>
+                    <div style="padding: 1rem; text-align: center; background: #0a0f1a; border-radius: 0 0 10px 10px;">
+                        <img src="{{ url_for('static', filename=inspection.image_path) }}"
+                            alt="Inspection image for case #{{ inspection.id }}"
+                            style="max-width: 100%; max-height: 400px; object-fit: contain; border-radius: 8px;">
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Detail Cards Grid -->
+                <div class="detail-grid">
+                    <!-- Vehicle Info -->
+                    <div class="detail-card">
+                        <div class="detail-card-header">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="1" y="3" width="15" height="13" rx="2" ry="2" />
+                                <path d="M16 8h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1" />
+                                <circle cx="5.5" cy="18" r="2.5" />
+                                <circle cx="18.5" cy="18" r="2.5" />
+                            </svg>
+                            <span>Vehicle Information</span>
+                        </div>
+                        <div class="detail-rows">
+                            <div class="detail-row">
+                                <span class="detail-label">License Plate</span>
+                                <span class="detail-value plate-value">{{ inspection.plate or '— Not readable' }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Location</span>
+                                <span class="detail-value">{{ inspection.location }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Camera</span>
+                                <span class="detail-value">{{ inspection.camera or '—' }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Date &amp; Time</span>
+                                <span class="detail-value">{{ inspection.timestamp.strftime('%b %d, %Y — %I:%M:%S %p')
+                                    }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Inspection Result -->
+                    <div class="detail-card">
+                        <div class="detail-card-header">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                <polyline points="22 4 12 14.01 9 11.01" />
+                            </svg>
+                            <span>Inspection Result</span>
+                        </div>
+                        <div class="detail-rows">
+                            <div class="detail-row">
+                                <span class="detail-label">Status</span>
+                                <span class="badge badge-{{ inspection.status }}">{{ inspection.status|capitalize
+                                    }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Confidence</span>
+                                <div class="confidence-inline">
+                                    <div class="confidence-bar-lg">
+                                        <div class="confidence-fill {{ inspection.status }}"
+                                            style="width:{{ inspection.confidence }}%">&nbsp;</div>
+                                    </div>
+                                    <span class="confidence-pct">{{ inspection.confidence }}%</span>
+                                </div>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Defects Found</span>
+                                <span class="detail-value">
+                                    {% if inspection.defect_list %}
+                                    {{ inspection.defect_list|length }} defect{{ 's' if inspection.defect_list|length >
+                                    1 else '' }}
+                                    {% else %}
+                                    None
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Defects Section (if any) -->
+                {% if inspection.defect_list %}
+                <div class="detail-card full-width">
+                    <div class="detail-card-header">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path
+                                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                            <line x1="12" y1="9" x2="12" y2="13" />
+                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                        </svg>
+                        <span>Detected Defects</span>
+                    </div>
+                    <div class="defects-grid">
+                        {% for d in inspection.defect_list %}
+                        <div class="defect-card">
+                            <div class="defect-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="15" y1="9" x2="9" y2="15" />
+                                    <line x1="9" y1="9" x2="15" y2="15" />
+                                </svg>
+                            </div>
+                            <span class="defect-name">{{ d }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Related Alerts (if any) -->
+                {% if alerts %}
+                <div class="detail-card full-width">
+                    <div class="detail-card-header">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                        </svg>
+                        <span>Related Alerts</span>
+                    </div>
+                    <div class="alerts-list">
+                        {% for a in alerts %}
+                        <div class="alert-row-detail">
+                            <div class="alert-row-left">
+                                <span class="status-badge status-{{ a.status }}">{{ a.status|capitalize }}</span>
+                                <span class="alert-time">{{ a.created_at.strftime('%b %d, %Y — %I:%M %p') }}</span>
+                            </div>
+                            <span class="alert-response">{{ a.response or 'No response yet' }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="detail-card full-width">
+                    <div class="empty-state">
+                        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                            <polyline points="22 4 12 14.01 9 11.01" />
+                        </svg>
+                        <div class="empty-title">No enforcement alert linked</div>
+                        <p class="empty-copy">This inspection has no pending NHA response workflow.</p>
+                    </div>
+                </div>
+                {% endif %}
+
+            </main>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+</body>
+
+</html>
