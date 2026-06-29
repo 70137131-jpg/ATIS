@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="NHA — Reports: Generate and export inspection statistics">
+    <title>NHA — Reports</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/reports.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+</head>
+
+<body>
+    <div class="layout">
+        <!-- ===== Sidebar ===== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-logo">NHA</div>
+                <div class="sidebar-brand-text">
+                    <span class="sidebar-title">NHA</span>
+                    <span class="sidebar-subtitle">Highway Inspection</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section-label">MAIN</div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-item" id="nav-dashboard">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7" />
+                        <rect x="14" y="3" width="7" height="7" />
+                        <rect x="14" y="14" width="7" height="7" />
+                        <rect x="3" y="14" width="7" height="7" />
+                    </svg>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{{ url_for('new_inspection') }}" class="nav-item" id="nav-inspect">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="16" />
+                        <line x1="8" y1="12" x2="16" y2="12" />
+                    </svg>
+                    <span>New Inspection</span>
+                </a>
+                <a href="{{ url_for('alerts') }}" class="nav-item" id="nav-alerts">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                        <line x1="12" y1="9" x2="12" y2="13" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    <span>Alerts</span>
+                </a>
+                <a href="{{ url_for('history') }}" class="nav-item" id="nav-history">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span>History</span>
+                </a>
+                <a href="{{ url_for('reports') }}" class="nav-item active" id="nav-reports">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                        <polyline points="10 9 9 9 8 9" />
+                    </svg>
+                    <span>Reports</span>
+                </a>
+            </nav>
+
+            <button class="sidebar-collapse" id="sidebar-collapse">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                </svg>
+                <span>Collapse</span>
+            </button>
+        </aside>
+
+        <!-- ===== Main Area ===== -->
+        <div class="main-area">
+            <!-- Top Bar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <span class="status-dot"></span>
+                    <span class="status-text">NHA Secure Network</span>
+                </div>
+                <div class="topbar-right">
+                    <button class="topbar-icon-btn" aria-label="Volume">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                        </svg>
+                    </button>
+                    <button class="topbar-icon-btn notification-btn" aria-label="Notifications">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                        </svg>
+                        <span class="notification-badge">{{ pending_alert_count }}</span>
+                    </button>
+                    <div class="topbar-user">
+                        <div class="user-avatar">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                            </svg>
+                        </div>
+                        <div class="user-info">
+                            <span class="user-name">{{ role }} User</span>
+                            <span class="user-role">{{ role }}</span>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('logout') }}" class="topbar-icon-btn" aria-label="Sign out" title="Sign out">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                            <polyline points="16 17 21 12 16 7" />
+                            <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
+                    </a>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <main class="content">
+                <!-- Page Header -->
+                <div class="page-header">
+                    <div>
+                        <span class="official-kicker">NHA Analytics</span>
+                        <h1 class="page-title">Reports</h1>
+                        <p class="page-subtitle">Generate official safety summaries for checkpoint operations</p>
+                    </div>
+                </div>
+
+                <!-- Report Configuration -->
+                <div class="config-card">
+                    <h2 class="config-title">Report Configuration</h2>
+
+                    <div class="config-field">
+                        <label class="config-label">Report Type</label>
+                        <div class="select-wrapper">
+                            <div class="select-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                                    <polyline points="17 6 23 6 23 12" />
+                                </svg>
+                            </div>
+                            <select id="report-type">
+                                <option value="safety-trend">Safety Trend</option>
+                                <option value="defect-distribution">Defect Distribution</option>
+                                <option value="daily-summary">Daily Summary</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="date-range">
+                        <span class="date-range-label">From</span>
+                        <div class="date-picker">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                <line x1="16" y1="2" x2="16" y2="6" />
+                                <line x1="8" y1="2" x2="8" y2="6" />
+                                <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                            <input type="date" id="date-from" value="2026-02-06">
+                        </div>
+                        <span class="date-range-label">To</span>
+                        <div class="date-picker">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                <line x1="16" y1="2" x2="16" y2="6" />
+                                <line x1="8" y1="2" x2="8" y2="6" />
+                                <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                            <input type="date" id="date-to" value="2026-02-13">
+                        </div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn-generate" id="generate-btn">
+                            <span class="btn-spinner"></span>
+                            <span class="btn-label">Generate Report</span>
+                        </button>
+                        <button class="btn-export-pdf" id="export-pdf-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            <span class="btn-spinner"></span>
+                            <span class="btn-label">Export PDF</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Safety Trend Chart Area -->
+                <div class="chart-card">
+                    <h2 class="chart-title" id="chart-card-title">Safety Trend</h2>
+                    <div class="chart-placeholder" id="chart-placeholder">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+                            class="chart-placeholder-icon">
+                            <line x1="18" y1="20" x2="18" y2="10" />
+                            <line x1="12" y1="20" x2="12" y2="4" />
+                            <line x1="6" y1="20" x2="6" y2="14" />
+                        </svg>
+                        <p class="chart-placeholder-text">Select report parameters and generate</p>
+                    </div>
+                    <div class="chart-canvas-wrapper" id="chart-canvas-wrapper" style="display:none; padding:1.5rem;">
+                        <canvas id="report-chart"></canvas>
+                    </div>
+                    <!-- Loading indicator -->
+                    <div class="chart-loading" id="chart-loading" style="display:none;">
+                        <div class="chart-spinner"></div>
+                        <p>Loading NHA inspection data...</p>
+                    </div>
+                    <!-- No data message -->
+                    <div class="chart-no-data" id="chart-no-data" style="display:none;">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="8" y1="12" x2="16" y2="12" />
+                        </svg>
+                        <p>No inspection data found for the selected date range.</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+    <script>
+        let chartInstance = null;
+
+        // ── Fetch real data from API endpoints ──
+        async function fetchChartData(type, from, to) {
+            const endpoints = {
+                'safety-trend': '/api/reports/safety-trend',
+                'defect-distribution': '/api/reports/defect-distribution',
+                'daily-summary': '/api/reports/daily-summary',
+            };
+            const url = `${endpoints[type]}?from=${from}&to=${to}`;
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`API error: ${resp.status}`);
+            return await resp.json();
+        }
+
+        function buildSafetyTrend(data) {
+            return {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [
+                        {
+                            label: 'Safe',
+                            data: data.safe,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16,185,129,0.1)',
+                            fill: true,
+                            tension: 0.35,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#10b981',
+                        },
+                        {
+                            label: 'Unsafe',
+                            data: data.unsafe,
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239,68,68,0.1)',
+                            fill: true,
+                            tension: 0.35,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#ef4444',
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Inspections' } },
+                    },
+                },
+            };
+        }
+
+        function buildDefectDistribution(data) {
+            const colors = ['#4285f4', '#ef4444', '#f59e0b', '#8b5cf6', '#10b981', '#ec4899', '#06b6d4', '#f97316'];
+            return {
+                type: 'doughnut',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        data: data.values,
+                        backgroundColor: colors.slice(0, data.labels.length),
+                        borderWidth: 2,
+                        borderColor: '#fff',
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right' } },
+                },
+            };
+        }
+
+        function buildDailySummary(data) {
+            return {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [
+                        {
+                            label: 'Total Inspections',
+                            data: data.total,
+                            backgroundColor: 'rgba(66,133,244,0.7)',
+                            borderRadius: 4,
+                        },
+                        {
+                            label: 'Unsafe Detected',
+                            data: data.unsafe,
+                            backgroundColor: 'rgba(239,68,68,0.7)',
+                            borderRadius: 4,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Count' } },
+                    },
+                },
+            };
+        }
+
+        // Check if all data values are zero
+        function isDataEmpty(data) {
+            if (data.safe) return data.safe.every(v => v === 0) && data.unsafe.every(v => v === 0);
+            if (data.values) return data.values.length === 0;
+            if (data.total) return data.total.every(v => v === 0);
+            return true;
+        }
+
+        document.getElementById('generate-btn').addEventListener('click', async () => {
+            const type = document.getElementById('report-type').value;
+            const from = document.getElementById('date-from').value;
+            const to = document.getElementById('date-to').value;
+            const titleMap = {
+                'safety-trend': 'Safety Trend',
+                'defect-distribution': 'Defect Distribution',
+                'daily-summary': 'Daily Summary',
+            };
+            const generateBtn = document.getElementById('generate-btn');
+            generateBtn.classList.add('is-loading');
+            generateBtn.disabled = true;
+
+            // Update card title
+            document.getElementById('chart-card-title').textContent = titleMap[type] || 'Report';
+
+            // Show loading state
+            document.getElementById('chart-placeholder').style.display = 'none';
+            document.getElementById('chart-canvas-wrapper').style.display = 'none';
+            document.getElementById('chart-no-data').style.display = 'none';
+            document.getElementById('chart-loading').style.display = 'flex';
+
+            // Destroy previous chart
+            if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+
+            try {
+                const data = await fetchChartData(type, from, to);
+
+                document.getElementById('chart-loading').style.display = 'none';
+
+                if (isDataEmpty(data)) {
+                    document.getElementById('chart-no-data').style.display = 'flex';
+                    return;
+                }
+
+                // Show canvas
+                const wrapper = document.getElementById('chart-canvas-wrapper');
+                wrapper.style.display = 'block';
+                wrapper.style.height = '380px';
+
+                // Build config
+                let config;
+                if (type === 'defect-distribution') {
+                    config = buildDefectDistribution(data);
+                } else if (type === 'daily-summary') {
+                    config = buildDailySummary(data);
+                } else {
+                    config = buildSafetyTrend(data);
+                }
+
+                chartInstance = new Chart(document.getElementById('report-chart'), config);
+
+            } catch (err) {
+                document.getElementById('chart-loading').style.display = 'none';
+                document.getElementById('chart-no-data').style.display = 'flex';
+                document.querySelector('#chart-no-data p').textContent = 'Error loading data: ' + err.message;
+                console.error('Report error:', err);
+            } finally {
+                generateBtn.classList.remove('is-loading');
+                generateBtn.disabled = false;
+            }
+        });
+
+        // ── PDF Export ──
+        document.getElementById('export-pdf-btn').addEventListener('click', () => {
+            document.getElementById('export-pdf-btn').classList.add('is-loading');
+            const from = document.getElementById('date-from').value;
+            const to = document.getElementById('date-to').value;
+            window.location.href = `/api/reports/export-pdf?from=${from}&to=${to}`;
+        });
+    </script>
+</body>
+
+</html>

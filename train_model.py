@@ -1,3 +1,5 @@
+import os
+
 from ultralytics import YOLO
 
 def train_atis_classifier():
@@ -25,7 +27,10 @@ def train_atis_classifier():
         exist_ok=True
     )
     
-    print("Training complete. Weights saved in ATIS_Project/tyre_safety_model/weights/")
+    # Train the model
+    model.train(**train_args)
+    
+    print("Training complete. Weights saved under runs/classify/ATIS_Project/tyre_safety_model/weights/")
 
 if __name__ == "__main__":
     train_atis_classifier()

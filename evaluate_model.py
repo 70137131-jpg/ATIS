@@ -1,4 +1,5 @@
 from ultralytics import YOLO
+from atis_inference import find_model_path
 
 if __name__ == '__main__':
     model = YOLO(r"E:\ATIS\runs\classify\ATIS_Project\tyre_safety_model\weights\best.pt")

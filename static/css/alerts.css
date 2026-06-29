@@ -1,0 +1,289 @@
+/* ===== Alerts Page Styles ===== */
+
+/* Pending counter badge (top right) */
+.pending-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 1rem;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: var(--radius-sm);
+    color: #f59e0b;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+/* ===== Tabs ===== */
+.alert-tabs {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: var(--font);
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 0.45rem 1rem;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+}
+
+.tab:hover {
+    color: var(--text-primary);
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.tab.active {
+    background: var(--blue);
+    color: #fff;
+}
+
+.tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 20px;
+    padding: 0 4px;
+}
+
+.tab.active .tab-badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+}
+
+/* ===== Table Section Header ===== */
+.table-section-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.table-section-title {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+/* ===== Alerts Table ===== */
+.alerts-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.alerts-table th {
+    text-align: left;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+.alerts-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.84rem;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.alerts-table tbody tr:hover {
+    background: rgba(66, 133, 244, 0.02);
+}
+
+.alerts-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Cell: Time */
+.alerts-table .cell-time {
+    line-height: 1.5;
+}
+
+.alerts-table .cell-time .time-main {
+    display: block;
+    font-weight: 600;
+    font-size: 0.82rem;
+}
+
+.alerts-table .cell-time .time-sub {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+/* Cell: Location */
+.alerts-table .cell-location {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.loc-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin-right: 0.4rem;
+}
+
+.loc-dot.warning {
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.45);
+}
+
+.loc-dot.escalated {
+    background: #ef4444;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.45);
+}
+
+.loc-text {
+    font-size: 0.82rem;
+    color: var(--text-primary);
+}
+
+/* Cell: Plate */
+.alerts-table .cell-plate {
+    font-weight: 600;
+    font-size: 0.84rem;
+    letter-spacing: 0.02em;
+}
+
+/* Cell: Defects */
+.alerts-table .cell-defects {
+    white-space: normal;
+    line-height: 1.8;
+}
+
+.defect-tag {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 500;
+    padding: 0.18rem 0.55rem;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    margin-right: 0.2rem;
+    vertical-align: middle;
+}
+
+.defect-more {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 0.18rem 0.35rem;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 4px;
+    vertical-align: middle;
+}
+
+/* Cell: Status */
+.status-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.7rem;
+    border-radius: 20px;
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+
+.status-pending {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.status-escalated {
+    background: rgba(139, 92, 246, 0.1);
+    color: #8b5cf6;
+}
+
+.status-resolved {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.status-acknowledged {
+    background: rgba(66, 133, 244, 0.1);
+    color: #4285f4;
+}
+
+/* Cell: Response */
+.cell-response {
+    color: var(--text-muted);
+    font-size: 0.84rem;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Cell: Actions — use inline layout, NOT flex on td */
+.cell-actions {
+    white-space: nowrap;
+}
+
+.action-btn {
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all var(--transition);
+    vertical-align: middle;
+    margin-right: 2px;
+}
+
+.action-view {
+    background: none;
+    color: var(--text-muted);
+}
+
+.action-view:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--text-primary);
+}
+
+.action-ack {
+    background: var(--green);
+    color: #fff;
+}
+
+.action-ack:hover {
+    background: #059669;
+    transform: scale(1.05);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+    .alert-tabs {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+
+    .pending-counter {
+        margin-top: 0.5rem;
+    }
+}

@@ -1,30 +1,16 @@
 import os
-from ultralytics import YOLO
+
+from atis_inference import classify_tyre_image, find_model_path
 
 def test_tyre_safety(image_path):
     """
     Runs inference using the trained ATIS classification model to predict tire safety.
     """
-    # Define possible weight locations relative to the running environment
-    possible_paths = [
-        r"runs\classify\ATIS_Project\tyre_safety_model\weights\best.pt",
-        r"runs\classify\train\weights\best.pt",
-        r"ATIS_Project\tyre_safety_model\weights\best.pt"
-    ]
-    
-    weights_path = None
-    for path in possible_paths:
-        if os.path.exists(path):
-            weights_path = path
-            break
-            
-    if not weights_path:
+    weights_path = find_model_path()
+    if weights_path is None:
         print("Error: Model weights (best.pt) not found anywhere in your runs directory.")
         print("Please verify your training finished successfully without errors.")
         return
-        
-    # Load your custom trained model
-    model = YOLO(weights_path)
     
     print(f"Analyzing tire image: {image_path}")
     print(f"Using model weights from: {weights_path}")

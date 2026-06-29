@@ -1,0 +1,253 @@
+/* ===== Inspection Detail Page ===== */
+
+/* Back link */
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.84rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color var(--transition);
+}
+
+.back-link:hover {
+    color: var(--blue);
+}
+
+/* Page header with badge */
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+}
+
+.badge-lg {
+    display: inline-block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.4rem 1.2rem;
+    border-radius: 24px;
+    text-transform: capitalize;
+}
+
+.badge-safe {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--green);
+}
+
+.badge-unsafe {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--red);
+}
+
+/* Detail Grid */
+.detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+/* Detail Card */
+.detail-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.detail-card.full-width {
+    margin-bottom: 1.25rem;
+}
+
+.detail-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.detail-card-header svg {
+    color: var(--blue);
+    flex-shrink: 0;
+}
+
+/* Detail Rows */
+.detail-rows {
+    padding: 0.5rem 0;
+}
+
+.detail-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 1.25rem;
+}
+
+.detail-row+.detail-row {
+    border-top: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.detail-label {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.detail-value {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.plate-value {
+    font-size: 0.92rem;
+    letter-spacing: 0.04em;
+}
+
+/* Confidence inline */
+.confidence-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 180px;
+}
+
+.confidence-bar-lg {
+    flex: 1;
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.confidence-pct {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    min-width: 36px;
+}
+
+/* Defects Grid */
+.defects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.75rem;
+    padding: 1.25rem;
+}
+
+.defect-card {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.8rem 1rem;
+    background: rgba(239, 68, 68, 0.04);
+    border: 1px solid rgba(239, 68, 68, 0.12);
+    border-radius: var(--radius-sm);
+}
+
+.defect-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--red);
+    flex-shrink: 0;
+}
+
+.defect-name {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Related Alerts */
+.alerts-list {
+    padding: 0.5rem 0;
+}
+
+.alert-row-detail {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+}
+
+.alert-row-detail+.alert-row-detail {
+    border-top: 1px solid var(--border);
+}
+
+.alert-row-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.alert-time {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.alert-response {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Status badges (reuse from alerts.css) */
+.status-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.7rem;
+    border-radius: 20px;
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+
+.status-pending {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.status-escalated {
+    background: rgba(139, 92, 246, 0.1);
+    color: #8b5cf6;
+}
+
+.status-resolved {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.status-acknowledged {
+    background: rgba(66, 133, 244, 0.1);
+    color: #4285f4;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .defects-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .alert-row-detail {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.4rem;
+    }
+}
