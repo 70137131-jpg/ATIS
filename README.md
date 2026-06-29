@@ -61,3 +61,4 @@ cd drive-iq
 sa
 
 # Ali kindly run the command : "pip install ultralytics torch torchvision" before running any training script in local enviornment.
+# yolo classify train resume model=E:\ATIS\runs\classify\ATIS_Project\tyre_safety_model\weights\last.pt workers=2 (Run this command in CLI interfacecase you get memory error crash don't restart the whole script)

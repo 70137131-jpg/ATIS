@@ -30,6 +30,9 @@ def test_tyre_safety(image_path):
     print(f"Using model weights from: {weights_path}")
     print("-" * 50)
     
+    # Confidence threshold — below this, result is treated as unreliable
+    CONFIDENCE_THRESHOLD = 65.0
+    
     # Run prediction (verbose=False keeps the console clean)
     results = model(image_path, verbose=False)
     
@@ -37,6 +40,7 @@ def test_tyre_safety(image_path):
     for result in results:
         top_class_id = result.probs.top1
         confidence = result.probs.top1conf.item()
+        confidence_pct = confidence * 100
         predicted_class = result.names[top_class_id]
         
         print("\n=== ATIS DIAGNOSTIC REPORT ===")
@@ -45,12 +49,19 @@ def test_tyre_safety(image_path):
         print(f"DEBUG - Predicted Class ID        : {top_class_id}")
         print("-" * 46)
         print(f"Detected Condition                : {predicted_class.upper()}")
-        print(f"Confidence Score                  : {confidence * 100:.2f}%")
+        print(f"Confidence Score                  : {confidence_pct:.2f}%")
+        print(f"Confidence Threshold              : {CONFIDENCE_THRESHOLD:.2f}%")
         print("-" * 46)
-        
-        # FYP Decision Logic Automation
-        # We enforce strict lowercase stripping to match string outputs exactly
-        if str(predicted_class).strip().lower() == 'normal':
+
+        # --- Low Confidence Override (checked first) ---
+        if confidence_pct < CONFIDENCE_THRESHOLD:
+            print("VERDICT: NOT A GOOD TYRE (LOW CONFIDENCE).")
+            print(f"Status : Orange - Model confidence ({confidence_pct:.2f}%) is below the")
+            print(f"         required threshold of {CONFIDENCE_THRESHOLD:.0f}%. Result is unreliable.")
+            print("         Please inspect the tyre manually or re-submit a clearer image.")
+
+        # --- Normal confidence: apply standard FYP Decision Logic ---
+        elif str(predicted_class).strip().lower() == 'normal':
             print("VERDICT: ELIGIBLE FOR HIGHWAY TRAVEL.")
             print("Status : Green - The tire texture shows no critical surface defects.")
         elif str(predicted_class).strip().lower() == 'cracked':
@@ -64,7 +75,7 @@ def test_tyre_safety(image_path):
 
 if __name__ == "__main__":
     # Target your sample image directly in the ATIS folder.
-    SAMPLE_IMAGE = "tyre3.jpg" 
+    SAMPLE_IMAGE = "tyre4.jpg" 
     
     # Convert to absolute path to prevent any root folder ambiguity
     abs_image_path = os.path.abspath(SAMPLE_IMAGE)
