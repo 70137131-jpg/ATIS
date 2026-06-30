@@ -115,7 +115,7 @@ def import_rows(rows):
         User(
             id=row["id"],
             email=row["email"],
-            password=row["password"],
+            password_hash=row["password_hash"],
             role=row["role"],
             created_at=parse_datetime(row["created_at"]),
         )

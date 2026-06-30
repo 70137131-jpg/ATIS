@@ -17,13 +17,18 @@ def seed():
         db.create_all()
         print("✓ Tables dropped and recreated.")
 
-        # ── Users ──────────────────────────────────────────
-        users = [
-            User(email="admin@atis.com",       password="admin123",      role="Admin"),
-            User(email="operator@atis.com",    password="operator123",   role="Operator"),
-            User(email="supervisor@atis.com",  password="super123",      role="Supervisor"),
-            User(email="inspector@atis.com",   password="inspect123",    role="Inspector"),
+        # ── Users (passwords stored hashed via set_password) ──
+        user_credentials = [
+            ("admin@atis.com",      "admin123",    "Admin"),
+            ("operator@atis.com",   "operator123", "Operator"),
+            ("supervisor@atis.com", "super123",    "Supervisor"),
+            ("inspector@atis.com",  "inspect123",  "Inspector"),
         ]
+        users = []
+        for email, password, role in user_credentials:
+            user = User(email=email, role=role)
+            user.set_password(password)
+            users.append(user)
         db.session.add_all(users)
 
         # ── Inspections ────────────────────────────────────

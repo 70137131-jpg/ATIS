@@ -128,26 +128,43 @@ def safe_filename(value: str) -> str:
 
 
 class InspectionLogger:
-    def __init__(self, enabled: bool):
+    def __init__(
+        self,
+        enabled: bool,
+        *,
+        flask_app=None,
+        db_obj=None,
+        inspection_model=None,
+        alert_model=None,
+        upload_folder=None,
+    ):
         self.enabled = enabled
         self.available = False
         self.error: str | None = None
         if not enabled:
             return
 
-        try:
-            from app import UPLOAD_FOLDER, app
-            from models import Alert, Inspection, db
-        except Exception as exc:
-            self.error = f"Database logging unavailable: {exc}"
-            print(self.error)
-            return
+        if all(value is not None for value in (flask_app, db_obj, inspection_model, alert_model, upload_folder)):
+            self.app = flask_app
+            self.db = db_obj
+            self.Alert = alert_model
+            self.Inspection = inspection_model
+            self.upload_folder = Path(upload_folder)
+        else:
+            try:
+                from app import UPLOAD_FOLDER, app
+                from models import Alert, Inspection, db
+            except Exception as exc:
+                self.error = f"Database logging unavailable: {exc}"
+                print(self.error)
+                return
 
-        self.app = app
-        self.db = db
-        self.Alert = Alert
-        self.Inspection = Inspection
-        self.upload_folder = Path(UPLOAD_FOLDER)
+            self.app = app
+            self.db = db
+            self.Alert = Alert
+            self.Inspection = Inspection
+            self.upload_folder = Path(UPLOAD_FOLDER)
+
         self.upload_folder.mkdir(parents=True, exist_ok=True)
         self.available = True
 
@@ -286,10 +303,10 @@ def maybe_analyze_zone(crop, rect, state: ZoneState, args, logger: InspectionLog
         state.unsafe_streak = 0
 
 
-def draw_header(frame, args, state: RuntimeState):
+def draw_header(frame, args, state: RuntimeState, controls_text: str = "q=quit p=pause r=reset"):
     status = "PAUSED" if state.paused else "LIVE"
     text = (
-        f"ATIS {status} | q=quit p=pause r=reset | "
+        f"ATIS {status} | {controls_text} | "
         f"unsafe streak={args.unsafe_streak} cooldown={int(args.cooldown)}s"
     )
     cv2.rectangle(frame, (0, 0), (frame.shape[1], 42), (16, 41, 31), -1)

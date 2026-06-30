@@ -70,9 +70,35 @@ Demo accounts:
 | Supervisor | supervisor@nha.gov.pk | super123 |
 | Inspector | inspector@nha.gov.pk | inspect123 |
 
+Demo passwords are stored **hashed** (Werkzeug); the table above lists the
+plaintext values only so you can log in to the local demo.
+
 The `/predict` route uploads an image, runs the trained classifier from
 `runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt`, stores an
 inspection row, and creates an alert when the prediction is unsafe.
+
+## Production Setup
+
+Configuration is centralised in `config.py` and driven by environment variables.
+For a production deployment set `ATIS_ENV=production` — the app then **refuses to
+start without a strong `SECRET_KEY`**, disables demo seeding and demo login
+aliases, and enables Secure session cookies.
+
+```bash
+export ATIS_ENV=production
+export SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+export DATABASE_URL=postgresql+psycopg2://user:pass@host:5432/atis_db
+
+python3 -m flask --app app db upgrade        # apply migrations (incl. password hashing)
+python3 -m flask --app app create-admin      # create the first admin (hashed password)
+
+gunicorn app:app                             # run behind a WSGI server (not app.py)
+```
+
+Security features active in every environment: hashed passwords, CSRF protection
+on all form posts, login rate limiting, upload size cap + image content
+validation, HTTPOnly/SameSite session cookies, and `debug` off unless
+`FLASK_DEBUG=1`. See `.env.example` for all tunables.
 
 ## CLI Model Commands
 
@@ -130,6 +156,19 @@ Run live inspection:
 ```bash
 python3 live_video_inspection.py --camera 0
 ```
+
+The dashboard also has a live camera area at:
+
+```text
+http://127.0.0.1:5000/live
+```
+
+That page renders the same Python/OpenCV analysis as an MJPEG stream from
+`/live/stream`. It does not use browser webcam APIs. Configure it with
+environment variables such as `ATIS_LIVE_CAMERA`, `ATIS_LIVE_ZONES`,
+`ATIS_LIVE_DB_LOG`, `ATIS_LIVE_UNSAFE_STREAK`, and `ATIS_LIVE_COOLDOWN`.
+`ATIS_LIVE_CAMERA` can be camera index `0`, a video file path, or an OpenCV
+supported stream URL.
 
 Runtime keys:
 

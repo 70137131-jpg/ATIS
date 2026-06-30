@@ -71,20 +71,36 @@ helpers. Key flows:
 - `inject_nha_status()` is a `context_processor` that feeds pending-alert counts
   and recent alerts into every template, so the header badges work app-wide.
 
-**Auth is session-based and intentionally minimal** (demo software): passwords
-are **plaintext** in the `users` table and compared directly — there is no
-hashing. Every protected route guards with `if "user" not in session`. There is
-no role enforcement beyond storing the role in the session.
+**Auth is session-based.** Passwords are **hashed** with Werkzeug
+(`User.set_password()` / `User.check_password()` in [models.py](models.py)) —
+never stored in plain text. `login()` verifies via `check_password()`. Every
+protected route guards with `if "user" not in session`, and a global
+`@app.before_request` (`require_authenticated_session`) enforces login on all
+non-public endpoints as a safety net. `login_required` / `role_required`
+decorators exist in [app.py](app.py) for per-route role gating as sensitive
+routes (user management, alert resolution) are added.
+
+**Security config is centralised in [config.py](config.py)** and loaded via
+`app.config.from_object(Config)`. `Config.validate()` **fails fast in production**
+(`ATIS_ENV=production`) if `SECRET_KEY` is missing/default. CSRF protection
+(Flask-WTF) covers all form POSTs — every form template includes
+`{{ csrf_token() }}`. Login is rate-limited (Flask-Limiter). Uploads are capped
+(`MAX_CONTENT_LENGTH`) and content-verified with PIL in `/predict`. Session
+cookies are HTTPOnly/SameSite=Lax (and Secure in production). `debug` is driven
+by `FLASK_DEBUG` (default **off**), not hardcoded.
 
 **[models.py](models.py)** defines three tables: `User`, `Inspection`, `Alert`
 (one Inspection → many Alerts). `Inspection.defects` is a **comma-separated
 string**, not a relation; use the `defect_list` property to read it as a list.
 
-**Database selection is automatic** ([app.py](app.py) `get_database_url`):
+**Database selection is automatic** ([config.py](config.py) `get_database_url`):
 defaults to SQLite at `instance/atis.db`, switches to Postgres if `DATABASE_URL`
 is set (and rewrites legacy `postgres://` → `postgresql://`). On startup,
-`ensure_local_database()` creates tables and seeds 4 demo users **only for
-SQLite** — Postgres relies on the Alembic migration in `migrations/` instead.
+`ensure_local_database()` creates tables and seeds 4 demo users **only in
+development** (gated on SQLite *and* `Config.SEED_DEMO_DATA`, which is false in
+production). Provision the first production admin with
+`flask --app app create-admin`. Postgres relies on the Alembic migrations in
+`migrations/` (now including `0002_password_hash`).
 
 ## Gotchas
 

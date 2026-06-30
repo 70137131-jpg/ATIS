@@ -10,3 +10,5 @@ static/uploads/*
 !static/uploads/.gitkeep
 config/live_zones.json
 instance/
+# Large archives (dataset upload + Colab model download) — never commit
+*.zip

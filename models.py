@@ -10,6 +10,7 @@ We have three main tables:
 
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from werkzeug.security import check_password_hash, generate_password_hash
 
 # Initialize the database object
 db = SQLAlchemy()
@@ -19,14 +20,28 @@ class User(db.Model):
     """
     User Table
     Stores login credentials and roles.
+
+    Passwords are never stored in plain text — only a salted hash is persisted.
+    Use ``set_password()`` to assign a password and ``check_password()`` to verify.
     """
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password = db.Column(db.String(128), nullable=False)  # Storing plain text for demo (use hash in prod!)
+    # Werkzeug hashes can be long (scrypt/pbkdf2); allow generous width.
+    password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="Operator")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def set_password(self, raw_password):
+        """Hash and store the given plain-text password."""
+        self.password_hash = generate_password_hash(raw_password)
+
+    def check_password(self, raw_password):
+        """Return True if the given plain-text password matches the stored hash."""
+        if not self.password_hash:
+            return False
+        return check_password_hash(self.password_hash, raw_password)
 
     def __repr__(self):
         return f"<User {self.email}>"
