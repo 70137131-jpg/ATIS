@@ -10,3 +10,4 @@ static/uploads/*
 !static/uploads/.gitkeep
 config/live_zones.json
 instance/
+ATIS_Dataset/
