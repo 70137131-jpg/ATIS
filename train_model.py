@@ -12,7 +12,7 @@ def train_atis_classifier():
     
     results = model.train(
         data=dataset_path,
-        epochs=50,
+        epochs=100,
         imgsz=224,
         batch=16,
         workers=2,
