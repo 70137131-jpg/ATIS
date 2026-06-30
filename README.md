@@ -9,6 +9,7 @@ The repository contains:
 - Training, evaluation, and single-image CLI scripts.
 - A Flask dashboard with login, inspection uploads, history, alerts, reports,
   PDF export, and database models.
+- A pure Python/OpenCV live camera workflow for fixed toll-booth tire scan zones.
 - Local SQLite demo data for immediate use, with optional PostgreSQL migration
   support for production/demo deployments.
 
@@ -23,6 +24,9 @@ The repository contains:
 +-- train_model.py                 # Train YOLO classifier
 +-- evaluate_model.py              # Validate trained classifier
 +-- test_tyre.py                   # CLI single-image classifier test
++-- calibrate_live_zones.py        # Draw fixed live camera tire scan zones
++-- live_video_inspection.py       # OpenCV live camera inspection runner
++-- config/live_zones.example.json # Example normalized zone config
 +-- requirements.txt               # Dashboard + ML dependencies
 +-- templates/                     # Jinja2 pages
 +-- static/                        # CSS, JS, images, runtime uploads

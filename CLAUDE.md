@@ -1,0 +1,101 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Overview
+
+ATIS (Automated Tire Inspection System) couples a YOLOv11 nano **classifier**
+(not a detector — it returns image-level class probabilities, no bounding boxes)
+with a Flask operator dashboard for Pakistan's NHA. The classifier labels a tire
+image as `normal` or `cracked`; the dashboard records each inspection, raises
+alerts on unsafe results, and produces charts and PDF reports.
+
+## Commands
+
+```bash
+# Setup
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# Run the dashboard (debug server on http://127.0.0.1:5000)
+python3 app.py
+
+# ML pipeline
+python3 prepare_dataset.py      # "Tire Textures/" -> "ATIS_Dataset/" (Ultralytics layout)
+python3 train_model.py          # trains 50 epochs, writes weights under ATIS_Project/
+python3 evaluate_model.py       # top-1 accuracy on ATIS_Dataset/val
+python3 test_tyre.py            # single-image CLI inference (edit SAMPLE_IMAGE in the file)
+
+# Force a device for training/inference (default: auto)
+YOLO_DEVICE=0 python3 train_model.py     # also accepts: cpu, mps
+
+# Database seeding
+python3 seed.py                 # DROPS all tables, recreates, loads rich demo data
+
+# PostgreSQL (SQLite is the default; no setup needed for local dev)
+cp .env.example .env            # set DATABASE_URL=postgresql+psycopg2://...
+python3 -m flask --app app db upgrade
+python3 migrate_sqlite_to_postgres.py            # copy SQLite rows into Postgres
+python3 migrate_sqlite_to_postgres.py --replace  # only to overwrite existing Postgres rows
+```
+
+There is no test runner or linter configured — `test_tyre.py` is a CLI demo
+script, not a unit test.
+
+## Architecture
+
+**Inference is centralized in [atis_inference.py](atis_inference.py).** Both the
+web app and CLI scripts call `classify_tyre_image()`. The YOLO model is
+**lazy-loaded and cached** in module globals (`_classifier_model`), so it loads
+once per process on first prediction. Model weights are resolved by
+`find_model_path()`, which checks `ATIS_MODEL_PATH` first, then several relative
+candidates. The class→status mapping lives in `_status_for_class()` and is
+gated by an **asymmetric, fail-safe confidence threshold** (`get_conf_threshold()`,
+env `ATIS_CONF_THRESHOLD`, default `0.60`): a tire is passed as `safe` **only**
+when predicted `normal` *and* top-1 confidence ≥ threshold. A `cracked`
+prediction is `unsafe` at any confidence; a low-confidence `normal` is downgraded
+to `unsafe` with the defect "Low-confidence normal — manual review"; **any
+unexpected class is also `unsafe`**. The returned dict includes `threshold` and
+a `low_confidence` flag for transparency. Note the model is a 2-class softmax, so
+the winning confidence is always ≥ 0.50 — a threshold only bites above that.
+
+**[app.py](app.py) is a single-file Flask app** holding all routes, config, and
+helpers. Key flows:
+- `/predict` (file upload) and `/api/live/analyze` (browser camera frames) both
+  funnel through `create_inspection_record()`, which writes an `Inspection` and,
+  **when status is `unsafe`, auto-creates a pending `Alert`** in the same
+  transaction.
+- The `/api/reports/*` endpoints aggregate inspections by date range in Python
+  (using `Counter`) for charts; `/api/reports/export-pdf` builds a landscape PDF
+  with reportlab.
+- `inject_nha_status()` is a `context_processor` that feeds pending-alert counts
+  and recent alerts into every template, so the header badges work app-wide.
+
+**Auth is session-based and intentionally minimal** (demo software): passwords
+are **plaintext** in the `users` table and compared directly — there is no
+hashing. Every protected route guards with `if "user" not in session`. There is
+no role enforcement beyond storing the role in the session.
+
+**[models.py](models.py)** defines three tables: `User`, `Inspection`, `Alert`
+(one Inspection → many Alerts). `Inspection.defects` is a **comma-separated
+string**, not a relation; use the `defect_list` property to read it as a list.
+
+**Database selection is automatic** ([app.py](app.py) `get_database_url`):
+defaults to SQLite at `instance/atis.db`, switches to Postgres if `DATABASE_URL`
+is set (and rewrites legacy `postgres://` → `postgresql://`). On startup,
+`ensure_local_database()` creates tables and seeds 4 demo users **only for
+SQLite** — Postgres relies on the Alembic migration in `migrations/` instead.
+
+## Gotchas
+
+- **Demo login aliases:** the README advertises `*@nha.gov.pk` accounts, but the
+  seeded users are `*@atis.com`. `login()` maps the nha.gov.pk emails to the
+  atis.com accounts. Both forms work; the stored email is the atis.com one.
+- **Missing template:** the `/inspect` route renders `live_inspection.html`,
+  which does **not** exist in `templates/` — that route currently 500s. The
+  working upload flow is `/upload` (`new_inspection.html`).
+- **Weights location vs. README:** `train_model.py` sets `project="ATIS_Project"`,
+  so weights land in `ATIS_Project/tyre_safety_model/weights/best.pt`. The
+  inference resolver also checks `runs/classify/...`, so both layouts work.
+- `instance/` (the SQLite DB) and `static/uploads/*` are gitignored — runtime
+  data is not committed.

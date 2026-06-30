@@ -6,5 +6,6 @@ python-dotenv>=1.0
 ultralytics>=8.0
 torch>=2.0
 torchvision>=0.15
+opencv-python>=4.8
 Pillow>=10.0
 reportlab>=4.0
