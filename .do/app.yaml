@@ -1,0 +1,39 @@
+# DigitalOcean App Platform spec for ATIS.
+# Deploy with:  doctl apps create --spec .do/app.yaml
+# SECRET_KEY is set at deploy time (not committed) so it stays out of git.
+name: atis
+region: nyc
+services:
+  - name: web
+    dockerfile_path: Dockerfile
+    source_dir: /
+    # Public-repo Git source — no GitHub OAuth step needed. Switch to a
+    # `github:` block later if you want auto-deploy-on-push.
+    git:
+      repo_clone_url: https://github.com/70137131-jpg/ATIS.git
+      branch: confidence-threshold-and-live-video
+    http_port: 8080
+    instance_count: 1
+    # basic-xs = 1 vCPU / 1 GB RAM (~$12/mo). 512 MB (basic-xxs) is too small
+    # for torch + the model and will OOM.
+    instance_size_slug: basic-xs
+    health_check:
+      http_path: /login
+    envs:
+      - key: ATIS_ENV
+        value: production
+      - key: ATIS_WARMUP
+        value: "1"
+      - key: SECRET_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: SET_AT_DEPLOY_TIME
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${atis-db.DATABASE_URL}
+databases:
+  # Dev-tier managed Postgres (~$7/mo). The app auto-creates its tables on
+  # first boot; run `flask --app app create-admin` once to make the login.
+  - name: atis-db
+    engine: PG
+    production: false
