@@ -9,6 +9,7 @@ The repository contains:
 - Training, evaluation, and single-image CLI scripts.
 - A Flask dashboard with login, inspection uploads, history, alerts, reports,
   PDF export, and database models.
+- A pure Python/OpenCV live camera workflow for fixed toll-booth tire scan zones.
 - Local SQLite demo data for immediate use, with optional PostgreSQL migration
   support for production/demo deployments.
 
@@ -23,6 +24,9 @@ The repository contains:
 +-- train_model.py                 # Train YOLO classifier
 +-- evaluate_model.py              # Validate trained classifier
 +-- test_tyre.py                   # CLI single-image classifier test
++-- calibrate_live_zones.py        # Draw fixed live camera tire scan zones
++-- live_video_inspection.py       # OpenCV live camera inspection runner
++-- config/live_zones.example.json # Example normalized zone config
 +-- requirements.txt               # Dashboard + ML dependencies
 +-- templates/                     # Jinja2 pages
 +-- static/                        # CSS, JS, images, runtime uploads
@@ -103,6 +107,43 @@ Run single-image inference:
 python3 test_tyre.py
 ```
 
+## Live Camera Inspection
+
+The live workflow is Python-only and uses OpenCV windows, not a browser camera.
+It assumes a fixed toll-booth camera position and calibrated tire scan zones.
+
+Install dependencies, then calibrate zones:
+
+```bash
+python3 calibrate_live_zones.py --camera 0
+```
+
+In the calibration window:
+
+- Drag one or more tire scan zones.
+- Press `s` to save to `config/live_zones.json`.
+- Press `c` to clear zones.
+- Press `q` to quit without saving.
+
+Run live inspection:
+
+```bash
+python3 live_video_inspection.py --camera 0
+```
+
+Runtime keys:
+
+- `q` quits.
+- `p` pauses or resumes analysis.
+- `r` resets live streak counters.
+
+Live logging defaults:
+
+- An unsafe event is logged after 3 unsafe predictions in a row for the same zone.
+- Each zone has a 20 second cooldown after logging.
+- Logged frames are saved under `static/uploads/` and appear in dashboard history/alerts.
+- Use `--no-db-log` to display live predictions without writing dashboard records.
+
 ## Current Model Artifact
 
 The included run was trained for 50 epochs. The last logged top-1 validation
@@ -112,6 +153,10 @@ The current classifier labels only two classes:
 
 - `normal` -> dashboard status `safe`
 - `cracked` -> dashboard status `unsafe`, defect `Cracking`
+
+The inference code is ready to map a future `bulge` class to `unsafe`, but the
+current model cannot truly detect bulges until you add `bulge` training and
+validation images and retrain.
 
 ## PostgreSQL Option
 
