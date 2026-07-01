@@ -76,6 +76,34 @@ def test_media_route_serves_stored_image(auth_client, app, monkeypatch, tmp_path
     assert len(img.data) > 0
 
 
+def test_live_analyze_classifies_a_frame(auth_client, app, monkeypatch):
+    """The browser-camera endpoint decodes a posted JPEG and returns a result."""
+    monkeypatch.setattr(
+        atis_app, "classify_tyre_frame",
+        lambda *_a, **_k: _fake_prediction("unsafe", ["Cracking"]),
+    )
+    resp = auth_client.post(
+        "/api/live/analyze",
+        data={"frame": (make_jpeg(), "frame.jpg")},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["status"] == "unsafe"
+    assert "Cracking" in body["defects"]
+
+
+def test_live_analyze_requires_auth(client):
+    resp = client.post(
+        "/api/live/analyze",
+        data={"frame": (make_jpeg(), "frame.jpg")},
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    # Either the endpoint's own 401 or the app-wide login redirect — never a result.
+    assert resp.status_code in (302, 401)
+
+
 def test_predict_rejects_non_image(auth_client, app, monkeypatch, tmp_path):
     monkeypatch.setattr(atis_app, "UPLOAD_FOLDER", str(tmp_path))
     from io import BytesIO

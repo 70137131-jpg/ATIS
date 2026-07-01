@@ -12,12 +12,19 @@
     <div>
         <span class="official-kicker">Live Operations</span>
         <h1 class="page-title">Live Tire Inspection</h1>
-        <p class="page-subtitle">Server-side Python/OpenCV stream with calibrated tire scan zones.</p>
+        <p class="page-subtitle">Your device camera streamed to the ATIS model for real-time classification.</p>
     </div>
     <a href="{{ url_for('alerts') }}" class="details-btn">
         <span class="btn-label">View Alerts</span>
     </a>
 </div>
+
+<!-- Config for the client script (URLs + CSRF token for the capture-and-log POST). -->
+<div id="liveConfig"
+     data-analyze-url="{{ url_for('live_analyze') }}"
+     data-predict-url="{{ url_for('predict') }}"
+     data-csrf="{{ csrf_token() }}"
+     hidden></div>
 
 <div class="live-layout">
     <section class="live-stream-panel" aria-label="Live tire inspection stream">
@@ -27,18 +34,19 @@
                 <span class="live-state-label">Camera off</span>
             </div>
             <div class="live-feed-meta">
-                <span>Camera {{ camera_source }}</span>
-                <span>{{ zones_path }}</span>
+                <span>Device camera</span>
             </div>
         </div>
 
         <div class="live-video-shell">
-            <img
-                class="live-video"
-                id="liveVideo"
-                data-stream="{{ url_for('live_stream') }}"
-                alt="Live ATIS tire inspection video stream"
-            >
+            <video class="live-video" id="liveVideo" autoplay muted playsinline></video>
+            <canvas id="liveCanvas" hidden></canvas>
+
+            <!-- Live classification badge (updated ~1x/sec). -->
+            <div class="live-result-badge" id="liveBadge" data-status="" hidden>
+                <span class="live-result-dot"></span>
+                <span class="live-result-text" id="liveBadgeText">Analyzing…</span>
+            </div>
 
             <div class="live-camera-overlay" id="cameraOverlay" data-state="off">
                 <div class="live-camera-overlay-inner">
@@ -49,8 +57,8 @@
                         <span class="camera-btn-label">Activate Camera</span>
                     </button>
                     <p class="live-camera-subhint">
-                        Starts the server webcam (source {{ camera_source }}) and begins
-                        live tire scanning.
+                        Uses your device's camera. Your browser will ask permission the
+                        first time.
                     </p>
                 </div>
             </div>
@@ -58,49 +66,45 @@
             <button type="button" class="camera-stop-btn" id="cameraStop" hidden>
                 <span class="camera-stop-dot" aria-hidden="true"></span> Stop Camera
             </button>
+
+            <button type="button" class="camera-capture-btn" id="cameraCapture" hidden>
+                Capture &amp; Log
+            </button>
         </div>
     </section>
 
-    <aside class="live-side-panel" aria-label="Live inspection settings">
+    <aside class="live-side-panel" aria-label="Live inspection result">
         <div class="live-side-header">
-            <span class="live-side-kicker">Inspection Rules</span>
-            <h2>Live Configuration</h2>
+            <span class="live-side-kicker">AI Analysis</span>
+            <h2>Live Result</h2>
         </div>
 
         <dl class="live-meta-list">
             <div class="live-meta-row">
-                <dt>Zones</dt>
-                <dd class="{{ 'status-ok' if zones_configured else 'status-warning' }}">
-                    {{ 'Configured' if zones_configured else 'Needs calibration' }}
-                </dd>
+                <dt>Status</dt>
+                <dd id="res-status">—</dd>
             </div>
             <div class="live-meta-row">
-                <dt>DB logging</dt>
-                <dd class="{{ 'status-ok' if db_logging else 'status-muted' }}">
-                    {{ 'Enabled' if db_logging else 'Off' }}
-                </dd>
+                <dt>Predicted class</dt>
+                <dd id="res-class">—</dd>
             </div>
             <div class="live-meta-row">
-                <dt>Unsafe rule</dt>
-                <dd>{{ unsafe_streak }} in a row</dd>
+                <dt>Confidence</dt>
+                <dd id="res-confidence">—</dd>
             </div>
             <div class="live-meta-row">
-                <dt>Cooldown</dt>
-                <dd>{{ cooldown }}s</dd>
-            </div>
-            <div class="live-meta-row">
-                <dt>Analysis rate</dt>
-                <dd>{{ analyze_interval }}s</dd>
-            </div>
-            <div class="live-meta-row">
-                <dt>Motion gate</dt>
-                <dd>{{ motion_threshold }}</dd>
+                <dt>Defects</dt>
+                <dd id="res-defects">—</dd>
             </div>
         </dl>
 
+        <div class="live-capture-status" id="captureStatus" hidden></div>
+
         <div class="live-note">
-            <strong>Calibration file</strong>
-            <span>{{ zones_path }}</span>
+            <strong>How this works</strong>
+            <span>Video comes from your device camera; frames are sent to the ATIS
+                model about once a second. On a hosted deployment, open the app in its
+                own browser tab (not embedded) so it can access your camera.</span>
         </div>
     </aside>
 </div>

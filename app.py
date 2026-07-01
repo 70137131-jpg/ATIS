@@ -34,7 +34,12 @@ from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 from PIL import Image, UnidentifiedImageError
 
-from atis_inference import classify_tyre_image, find_model_path, load_classifier
+from atis_inference import (
+    classify_tyre_frame,
+    classify_tyre_image,
+    find_model_path,
+    load_classifier,
+)
 from config import Config
 from models import Alert, Inspection, User, db
 
@@ -806,6 +811,45 @@ def logout():
     """
     session.clear()
     return redirect(url_for("login"))
+
+
+@csrf.exempt
+@app.route("/api/live/analyze", methods=["POST"])
+def live_analyze():
+    """Classify a single frame captured by the operator's browser camera.
+
+    This is what makes the live feed work in the cloud: the video comes from the
+    client's device (getUserMedia) and frames are POSTed here for inference, so no
+    server-side camera is needed. Read-only (no DB write), so it is CSRF-exempt;
+    still requires an authenticated session."""
+    if "user" not in session:
+        return jsonify({"error": "authentication required"}), 401
+
+    file = request.files.get("frame")
+    if file is None:
+        return jsonify({"error": "no frame provided"}), 400
+
+    import cv2
+    import numpy as np
+
+    buffer = np.frombuffer(file.read(), dtype=np.uint8)
+    frame = cv2.imdecode(buffer, cv2.IMREAD_COLOR)
+    if frame is None:
+        return jsonify({"error": "could not decode frame"}), 400
+
+    try:
+        prediction = classify_tyre_frame(frame)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.warning("Live analyze inference failed: %s", exc)
+        return jsonify({"error": "inference failed"}), 500
+
+    return jsonify({
+        key: prediction[key]
+        for key in (
+            "status", "confidence", "defects",
+            "predicted_class", "threshold", "low_confidence",
+        )
+    })
 
 
 # -------------------------------------------------------------------------

@@ -295,6 +295,77 @@
     background: #ef4444;
 }
 
+/* Browser <video> fills the shell like the old <img> did. */
+video.live-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #06130e;
+}
+
+/* Live classification badge over the video. */
+.live-result-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(10, 22, 16, 0.72);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    backdrop-filter: blur(4px);
+}
+
+.live-result-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.live-result-badge[data-status="safe"] { box-shadow: inset 0 0 0 1px rgba(22, 132, 95, 0.55); }
+.live-result-badge[data-status="safe"] .live-result-dot { background: var(--green); }
+.live-result-badge[data-status="unsafe"] { box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.6); }
+.live-result-badge[data-status="unsafe"] .live-result-dot { background: #ef4444; }
+
+/* Capture & Log control, shown only while live. */
+.camera-capture-btn {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.6rem 1.3rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--green);
+    color: #fff;
+    font-size: 0.86rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(22, 132, 95, 0.4);
+    transition: background 0.2s ease, transform 0.12s ease;
+}
+
+.camera-capture-btn:hover { background: #12734f; transform: translateX(-50%) translateY(-1px); }
+.camera-capture-btn:disabled { opacity: 0.7; cursor: default; }
+
+.live-capture-status {
+    margin-top: 0.85rem;
+    padding: 0.7rem 0.85rem;
+    border-radius: 8px;
+    background: rgba(37, 107, 79, 0.08);
+    border: 1px solid rgba(37, 107, 79, 0.18);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.live-capture-status a { color: var(--blue); font-weight: 700; }
+
 /* State chip pulse colour reflects camera status. */
 #cameraState[data-state="off"] .live-pulse {
     background: var(--text-muted);
