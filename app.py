@@ -210,11 +210,21 @@ def env_int(name, default):
 
 
 def live_zones_path():
-    """Return the configured live-zone JSON path."""
+    """Return the live-zone JSON path.
+
+    Falls back to the bundled ``config/live_zones.example.json`` when no calibrated
+    file exists (e.g. a fresh or hosted deploy, where ``live_zones.json`` is
+    gitignored). This keeps the live view "Configured" out of the box instead of
+    showing "Needs calibration"; operators can still override with ATIS_LIVE_ZONES
+    or by calibrating a real ``live_zones.json``."""
     raw_path = os.environ.get("ATIS_LIVE_ZONES", str(LIVE_DEFAULT_ZONES))
     path = Path(raw_path)
     if not path.is_absolute():
         path = BASE_DIR / path
+    if not path.exists():
+        example = BASE_DIR / "config" / "live_zones.example.json"
+        if example.exists():
+            return example
     return path
 
 
