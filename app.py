@@ -63,6 +63,14 @@ app = Flask(__name__)
 app.config.from_object(Config)
 Config.validate()
 
+# In production the app sits behind a TLS-terminating reverse proxy (e.g. Hugging
+# Face Spaces / any PaaS). Trust one hop of X-Forwarded-* so Flask sees the real
+# https scheme and host — required for correct Secure-cookie and CSRF handling.
+if Config.IS_PRODUCTION:
+    from werkzeug.middleware.proxy_fix import ProxyFix
+
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
 # Upload configuration
 UPLOAD_FOLDER = os.path.join(app.static_folder, "uploads")
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "webp"}

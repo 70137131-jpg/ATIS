@@ -69,9 +69,14 @@ class Config:
 
     # Session cookie hardening
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = "Lax"
     # Only require HTTPS-only cookies in production (dev runs over plain http).
     SESSION_COOKIE_SECURE = IS_PRODUCTION
+    # In production the app is often embedded in a cross-site iframe (e.g. Hugging
+    # Face Spaces). A "Lax" cookie is dropped in that context, which loses the
+    # session and breaks CSRF ("session token is missing"). "None" (which requires
+    # Secure=True, satisfied in production) lets the session survive the iframe.
+    # Dev stays "Lax" because "None" without Secure is rejected over plain http.
+    SESSION_COOKIE_SAMESITE = "None" if IS_PRODUCTION else "Lax"
     PERMANENT_SESSION_LIFETIME = timedelta(hours=int(os.environ.get("ATIS_SESSION_HOURS", "8")))
 
     # Rate limiting storage (in-memory by default; use Redis for multi-worker prod).
