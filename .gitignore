@@ -10,5 +10,7 @@ static/uploads/*
 !static/uploads/.gitkeep
 config/live_zones.json
 instance/
-ATIS_Dataset/
-Tire Textures/
+# Large archives (dataset upload + Colab model download) — never commit
+*.zip
+# Scratch weight backups created during evaluation/retraining — not history
+*.bak.pt

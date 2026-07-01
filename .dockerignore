@@ -1,0 +1,34 @@
+# Keep the Docker build context tiny: ship application code + model weights only.
+# (runs/.../best.pt is intentionally NOT excluded — the app loads it at startup.)
+
+.git
+.gitignore
+.dockerignore
+Dockerfile
+
+# Virtualenvs / Python caches
+.venv/
+venv/
+venv312/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Multi-GB training data — the model is already trained, none of this is needed at runtime.
+ATIS_Dataset/
+ATIS_Dataset.zip
+Tire Textures/
+*.zip
+
+# Local-only runtime state
+instance/
+static/uploads/*
+!static/uploads/.gitkeep
+config/live_zones.json
+.env
+
+# Editor / OS noise
+.DS_Store
+*.code-workspace
+.vscode/

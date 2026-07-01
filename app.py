@@ -7,14 +7,19 @@ It connects the operator dashboard to the trained ATIS tire classifier.
 """
 
 import os
+import time
 import uuid
 from collections import Counter
 from datetime import datetime, timedelta
+from functools import wraps
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
+import click
 from flask import (
     Flask,
+    Response,
     flash,
     jsonify,
     redirect,
@@ -24,7 +29,13 @@ from flask import (
     session,
     url_for,
 )
-from atis_inference import classify_tyre_image
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect
+from PIL import Image, UnidentifiedImageError
+
+from atis_inference import classify_tyre_image, find_model_path, load_classifier
+from config import Config
 from models import Alert, Inspection, User, db
 
 try:
@@ -44,36 +55,35 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 
-
-def get_database_url():
-    """Return the configured database URL, defaulting to local SQLite."""
-    default_sqlite = BASE_DIR / "instance" / "atis.db"
-    default_sqlite.parent.mkdir(exist_ok=True)
-    database_url = os.environ.get("DATABASE_URL", f"sqlite:///{default_sqlite}")
-    if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
-    return database_url
-
 # Initialize the Flask application
 app = Flask(__name__)
 
-# Secret key for session management (keep this safe in production!)
-app.secret_key = os.environ.get("SECRET_KEY", "atis-secret-key-change-in-production")
-
-# Database configuration
-database_url = get_database_url()
-app.config["SQLALCHEMY_DATABASE_URI"] = database_url
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-if not database_url.startswith("sqlite"):
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
+# Centralised, environment-driven configuration (see config.py).
+# validate() fails fast in production if the secret key is missing/insecure.
+app.config.from_object(Config)
+Config.validate()
 
 # Upload configuration
 UPLOAD_FOLDER = os.path.join(app.static_folder, "uploads")
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "webp"}
 
+# Live camera configuration
+LIVE_DEFAULT_ZONES = BASE_DIR / "config" / "live_zones.json"
+
 # Initialize the database with the app
 db.init_app(app)
 migrate = Migrate(app, db)
+
+# CSRF protection for all state-changing form posts.
+csrf = CSRFProtect(app)
+
+# Rate limiting (brute-force protection on auth). In-memory by default; point
+# RATELIMIT_STORAGE_URI at Redis for multi-worker production deployments.
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    storage_uri=app.config["RATELIMIT_STORAGE_URI"],
+)
 
 
 # -------------------------------------------------------------------------
@@ -112,26 +122,372 @@ def wants_json_response():
     )
 
 
+# -------------------------------------------------------------------------
+# AUTHENTICATION / AUTHORIZATION
+# -------------------------------------------------------------------------
+
+# Endpoints reachable without an authenticated session.
+PUBLIC_ENDPOINTS = {"login", "static"}
+
+
+def _auth_failure_response():
+    """Return a 401 JSON for API/XHR callers, otherwise redirect to login."""
+    if request.path.startswith("/api/") or wants_json_response():
+        return jsonify({"error": "Unauthorized"}), 401
+    return redirect(url_for("login"))
+
+
+@app.before_request
+def require_authenticated_session():
+    """Global safety net: enforce login on every endpoint except the public ones."""
+    endpoint = request.endpoint
+    if endpoint is None or endpoint in PUBLIC_ENDPOINTS:
+        return None
+    if "user" not in session:
+        return _auth_failure_response()
+    return None
+
+
+def login_required(view):
+    """Decorator enforcing an authenticated session for a single view."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if "user" not in session:
+            return _auth_failure_response()
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def role_required(*roles):
+    """Decorator restricting a view to the given roles (e.g. "Admin", "Supervisor").
+
+    Ready for sensitive routes (user management, alert resolution) as they are added.
+    """
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            if "user" not in session:
+                return _auth_failure_response()
+            if session.get("role") not in roles:
+                if request.path.startswith("/api/") or wants_json_response():
+                    return jsonify({"error": "Forbidden"}), 403
+                return render_template("403.html"), 403
+            return view(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
+def env_bool(name, default=False):
+    """Read a boolean environment variable."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+def env_float(name, default):
+    """Read a float environment variable with a safe fallback."""
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def env_int(name, default):
+    """Read an integer environment variable with a safe fallback."""
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def live_zones_path():
+    """Return the configured live-zone JSON path."""
+    raw_path = os.environ.get("ATIS_LIVE_ZONES", str(LIVE_DEFAULT_ZONES))
+    path = Path(raw_path)
+    if not path.is_absolute():
+        path = BASE_DIR / path
+    return path
+
+
+def live_camera_source():
+    """Return the OpenCV camera source, supporting indexes, files, and streams."""
+    raw_source = os.environ.get("ATIS_LIVE_CAMERA", "0").strip() or "0"
+    try:
+        return int(raw_source)
+    except ValueError:
+        path = Path(raw_source)
+        if not path.is_absolute() and (BASE_DIR / path).exists():
+            return str(BASE_DIR / path)
+        return raw_source
+
+
+def live_stream_args():
+    """Build an args-like object compatible with the OpenCV live pipeline."""
+    return SimpleNamespace(
+        analyze_interval=env_float("ATIS_LIVE_ANALYZE_INTERVAL", 0.5),
+        motion_threshold=env_float("ATIS_LIVE_MOTION_THRESHOLD", 8.0),
+        unsafe_streak=env_int("ATIS_LIVE_UNSAFE_STREAK", 3),
+        cooldown=env_float("ATIS_LIVE_COOLDOWN", 20.0),
+        location=os.environ.get("ATIS_LIVE_LOCATION", "Dashboard Live Feed"),
+        camera_label=os.environ.get("ATIS_LIVE_CAMERA_LABEL", "DASHBOARD-LIVE"),
+    )
+
+
+def display_path(path):
+    """Show paths relative to the project when possible."""
+    try:
+        return str(path.relative_to(BASE_DIR))
+    except ValueError:
+        return str(path)
+
+
+def encode_mjpeg_frame(frame):
+    """Encode an OpenCV frame for multipart MJPEG streaming."""
+    import cv2
+
+    ok, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+    if not ok:
+        return None
+    return b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
+
+
+def live_message_frame(title, lines=None):
+    """Create a readable placeholder frame for camera/config errors."""
+    import cv2
+    import numpy as np
+
+    lines = lines or []
+    frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+    frame[:] = (28, 41, 34)
+    cv2.rectangle(frame, (0, 0), (1280, 72), (16, 41, 31), -1)
+    cv2.putText(frame, "ATIS LIVE", (32, 48), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (66, 197, 244), 3)
+    cv2.putText(frame, title, (60, 220), cv2.FONT_HERSHEY_SIMPLEX, 1.35, (255, 255, 255), 3)
+
+    y = 286
+    for raw_line in lines:
+        for line in str(raw_line).splitlines() or [""]:
+            for start in range(0, len(line), 72):
+                cv2.putText(
+                    frame,
+                    line[start:start + 72],
+                    (60, y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.72,
+                    (210, 224, 216),
+                    2,
+                )
+                y += 38
+            if not line:
+                y += 38
+        if y > 650:
+            break
+    return frame
+
+
+def live_message_stream(title, lines=None):
+    """Yield an MJPEG error/status frame repeatedly."""
+    while True:
+        payload = encode_mjpeg_frame(live_message_frame(title, lines))
+        if payload:
+            yield payload
+        time.sleep(1.0)
+
+
+def generate_live_frames():
+    """Generate annotated live inspection frames for the dashboard."""
+    try:
+        import cv2
+        from live_video_inspection import (
+            InspectionLogger,
+            RuntimeState,
+            crop_zone,
+            draw_header,
+            draw_zone_overlay,
+            load_zones,
+            maybe_analyze_zone,
+        )
+    except Exception as exc:
+        yield from live_message_stream(
+            "Live video dependency unavailable",
+            ["Install requirements and verify OpenCV/Ultralytics imports.", str(exc)],
+        )
+        return
+
+    zones_path = live_zones_path()
+    try:
+        zones = load_zones(zones_path)
+    except SystemExit as exc:
+        yield from live_message_stream(
+            "Zone calibration required",
+            [str(exc), "Run: python3 calibrate_live_zones.py --camera 0"],
+        )
+        return
+    except Exception as exc:
+        yield from live_message_stream("Could not load live zones", [str(exc)])
+        return
+
+    args = live_stream_args()
+    runtime = RuntimeState(zones)
+    logger = InspectionLogger(
+        enabled=env_bool("ATIS_LIVE_DB_LOG", True),
+        flask_app=app,
+        db_obj=db,
+        inspection_model=Inspection,
+        alert_model=Alert,
+        upload_folder=UPLOAD_FOLDER,
+    )
+
+    source = live_camera_source()
+    cap = cv2.VideoCapture(source)
+    if not cap.isOpened():
+        yield from live_message_stream(
+            "Camera feed unavailable",
+            [
+                f"OpenCV could not open source: {source}",
+                "Check ATIS_LIVE_CAMERA or connect camera index 0.",
+            ],
+        )
+        return
+
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, env_int("ATIS_LIVE_WIDTH", 1280))
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, env_int("ATIS_LIVE_HEIGHT", 720))
+
+    try:
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                if isinstance(source, str) and Path(source).exists():
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    continue
+                payload = encode_mjpeg_frame(live_message_frame("Camera frame read failed"))
+                if payload:
+                    yield payload
+                time.sleep(0.5)
+                continue
+
+            display = frame.copy()
+            now = time.monotonic()
+            for zone in zones:
+                crop, rect = crop_zone(frame, zone)
+                maybe_analyze_zone(
+                    crop,
+                    rect,
+                    runtime.zone_states[zone.name],
+                    args,
+                    logger,
+                    frame.copy(),
+                    zone,
+                    now,
+                )
+                draw_zone_overlay(display, zone, rect, runtime.zone_states[zone.name], args.motion_threshold)
+
+            draw_header(display, args, runtime, controls_text="dashboard stream")
+            payload = encode_mjpeg_frame(display)
+            if payload:
+                yield payload
+    finally:
+        cap.release()
+
+
+DEMO_USERS = [
+    ("admin@atis.com", "admin123", "Admin"),
+    ("operator@atis.com", "operator123", "Operator"),
+    ("supervisor@atis.com", "super123", "Supervisor"),
+    ("inspector@atis.com", "inspect123", "Inspector"),
+]
+
+
 def ensure_local_database():
-    """Create minimal local SQLite tables/users if the demo database is absent."""
+    """Create the local SQLite tables and, in development only, seed demo users.
+
+    Demo accounts are NEVER created in production: seeding is gated on both the
+    SQLite backend and Config.SEED_DEMO_DATA (false when ATIS_ENV=production).
+    Passwords are stored hashed via User.set_password().
+    """
     if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"):
         return
 
     with app.app_context():
         db.create_all()
+
+        if not app.config["SEED_DEMO_DATA"]:
+            return
         if User.query.count() > 0:
             return
 
-        db.session.add_all([
-            User(email="admin@atis.com", password="admin123", role="Admin"),
-            User(email="operator@atis.com", password="operator123", role="Operator"),
-            User(email="supervisor@atis.com", password="super123", role="Supervisor"),
-            User(email="inspector@atis.com", password="inspect123", role="Inspector"),
-        ])
+        for email, password, role in DEMO_USERS:
+            user = User(email=email, role=role)
+            user.set_password(password)
+            db.session.add(user)
         db.session.commit()
 
 
 ensure_local_database()
+
+
+def warmup_model(fail_hard: bool = False) -> bool:
+    """Load the classifier and run one dummy inference at boot.
+
+    Ensures the first real request isn't slow and that a missing/corrupt model is
+    detected early. In production (fail_hard=True) a failure aborts startup; in dev
+    it only logs a warning so non-inference pages still work.
+    """
+    try:
+        import numpy as np
+
+        model = load_classifier()
+        model.predict(np.zeros((224, 224, 3), dtype=np.uint8), verbose=False)
+        app.logger.info("ATIS model warmup complete: %s", find_model_path())
+        return True
+    except Exception as exc:  # noqa: BLE001 - surface any load/inference failure
+        message = f"ATIS model warmup failed: {exc}"
+        if fail_hard:
+            raise RuntimeError(message) from exc
+        app.logger.warning(message)
+        return False
+
+
+# Opt-in warmup for the web server (set ATIS_WARMUP=1 when running gunicorn).
+# Fails hard in production so a broken model never serves traffic silently.
+if env_bool("ATIS_WARMUP", False):
+    warmup_model(fail_hard=app.config["IS_PRODUCTION"])
+
+
+# -------------------------------------------------------------------------
+# CLI COMMANDS
+# -------------------------------------------------------------------------
+
+@app.cli.command("create-admin")
+@click.option("--email", prompt=True, help="Login email for the account.")
+@click.option(
+    "--password",
+    prompt=True,
+    hide_input=True,
+    confirmation_prompt=True,
+    help="Account password (stored hashed).",
+)
+@click.option("--role", default="Admin", show_default=True, help="Account role.")
+def create_admin(email, password, role):
+    """Create or update a user with a securely hashed password.
+
+    The supported way to provision the first administrator in production
+    (where demo seeding is disabled). Usage:
+
+        ATIS_ENV=production flask --app app create-admin
+    """
+    db.create_all()
+    email = email.strip().lower()
+    user = User.query.filter_by(email=email).first()
+    action = "Updated" if user else "Created"
+    if user is None:
+        user = User(email=email, role=role)
+        db.session.add(user)
+    else:
+        user.role = role
+    user.set_password(password)
+    db.session.commit()
+    click.echo(f"✓ {action} user {email} ({role}) with a hashed password.")
 
 
 # -------------------------------------------------------------------------
@@ -152,6 +508,7 @@ def index():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute", methods=["POST"])
 def login():
     """
     Login Route.
@@ -164,19 +521,22 @@ def login():
         password = request.form.get("password", "")
         login_email = email
 
-        demo_aliases = {
-            "admin@nha.gov.pk": "admin@atis.com",
-            "operator@nha.gov.pk": "operator@atis.com",
-            "supervisor@nha.gov.pk": "supervisor@atis.com",
-            "inspector@nha.gov.pk": "inspector@atis.com",
-        }
-        login_email = demo_aliases.get(email, email)
+        # Demo convenience aliases (nha.gov.pk -> atis.com) are disabled in
+        # production; see Config.ENABLE_DEMO_LOGIN_ALIASES.
+        if app.config["ENABLE_DEMO_LOGIN_ALIASES"]:
+            demo_aliases = {
+                "admin@nha.gov.pk": "admin@atis.com",
+                "operator@nha.gov.pk": "operator@atis.com",
+                "supervisor@nha.gov.pk": "supervisor@atis.com",
+                "inspector@nha.gov.pk": "inspector@atis.com",
+            }
+            login_email = demo_aliases.get(email, email)
 
         # Check if user exists in the database
         user = User.query.filter_by(email=login_email).first()
 
-        # Check password (in a real app, use hashing like bcrypt!)
-        if user and user.password == password:
+        # Verify the password against the stored salted hash.
+        if user and user.check_password(password):
             # Login successful: store user in session
             session["user"] = user.email
             session["role"] = user.role
@@ -344,6 +704,46 @@ def new_inspection():
     )
 
 
+@app.route("/live")
+def live_feed():
+    """
+    Live Camera Page.
+    Shows the Python/OpenCV tire inspection stream inside the dashboard.
+    """
+    if "user" not in session:
+        return redirect(url_for("login"))
+
+    args = live_stream_args()
+    zones_path = live_zones_path()
+    return render_template(
+        "live_feed.html",
+        user=session["user"],
+        role=session["role"],
+        camera_source=os.environ.get("ATIS_LIVE_CAMERA", "0"),
+        zones_path=display_path(zones_path),
+        zones_configured=zones_path.exists(),
+        db_logging=env_bool("ATIS_LIVE_DB_LOG", True),
+        analyze_interval=args.analyze_interval,
+        motion_threshold=args.motion_threshold,
+        unsafe_streak=args.unsafe_streak,
+        cooldown=int(args.cooldown),
+    )
+
+
+@app.route("/live/stream")
+def live_stream():
+    """
+    MJPEG stream endpoint for the live dashboard camera area.
+    """
+    if "user" not in session:
+        return redirect(url_for("login"))
+
+    return Response(
+        generate_live_frames(),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
+
+
 @app.route("/logout")
 def logout():
     """
@@ -384,6 +784,16 @@ def predict():
     save_path = os.path.join(UPLOAD_FOLDER, unique_name)
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     file.save(save_path)
+
+    # Verify the saved file is a genuine image, not just a permitted extension.
+    # (Extension checks alone are spoofable; this rejects disguised/corrupt files.)
+    try:
+        with Image.open(save_path) as probe:
+            probe.verify()
+    except (UnidentifiedImageError, OSError):
+        os.remove(save_path)
+        flash("Uploaded file is not a valid image.", "error")
+        return redirect(url_for("new_inspection"))
 
     # Relative path for storing in DB and serving via static files
     image_rel_path = f"uploads/{unique_name}"
@@ -747,6 +1157,17 @@ def export_pdf():
 # ERROR HANDLERS
 # -------------------------------------------------------------------------
 
+@app.errorhandler(413)
+def request_entity_too_large(e):
+    """Reject uploads that exceed MAX_CONTENT_LENGTH with a clean message."""
+    limit_mb = app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)
+    message = f"File too large. Maximum upload size is {limit_mb} MB."
+    if request.path.startswith("/api/") or wants_json_response():
+        return jsonify({"error": message}), 413
+    flash(message, "error")
+    return redirect(url_for("new_inspection"))
+
+
 @app.errorhandler(404)
 def page_not_found(e):
     """Show a custom 404 page when a URL is not found."""
@@ -760,5 +1181,14 @@ def internal_error(e):
 
 
 # Main entry point
+#
+# NOTE: this development server (and the debug flag) is for local use only.
+# In production run a WSGI server, e.g. `gunicorn app:app`, with ATIS_ENV=production.
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # Best-effort warmup for the dev server (logs a warning if weights are missing).
+    warmup_model(fail_hard=False)
+    app.run(
+        host=os.environ.get("FLASK_RUN_HOST", "127.0.0.1"),
+        port=int(os.environ.get("FLASK_RUN_PORT", "5000")),
+        debug=app.config["DEBUG"],
+    )

@@ -45,5 +45,168 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-# Ali kindly run the command : "pip install ultralytics torch torchvision" before running any training script in local enviornment.
-# yolo classify train resume model=E:\ATIS\runs\classify\ATIS_Project\tyre_safety_model\weights\last.pt workers=2 (Run this command in CLI interfacecase you get memory error crash don't restart the whole script)
+The app defaults to the included SQLite database at `instance/atis.db`. Copy
+`.env.example` to `.env` only if you want to override settings such as
+`DATABASE_URL`, `SECRET_KEY`, `ATIS_MODEL_PATH`, or `YOLO_DEVICE`.
+
+## Run The Dashboard
+
+```bash
+python3 app.py
+```
+
+Open:
+
+```text
+http://127.0.0.1:5000
+```
+
+Demo accounts:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | admin@nha.gov.pk | admin123 |
+| Operator | operator@nha.gov.pk | operator123 |
+| Supervisor | supervisor@nha.gov.pk | super123 |
+| Inspector | inspector@nha.gov.pk | inspect123 |
+
+Demo passwords are stored **hashed** (Werkzeug); the table above lists the
+plaintext values only so you can log in to the local demo.
+
+The `/predict` route uploads an image, runs the trained classifier from
+`runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt`, stores an
+inspection row, and creates an alert when the prediction is unsafe.
+
+## Production Setup
+
+Configuration is centralised in `config.py` and driven by environment variables.
+For a production deployment set `ATIS_ENV=production` — the app then **refuses to
+start without a strong `SECRET_KEY`**, disables demo seeding and demo login
+aliases, and enables Secure session cookies.
+
+```bash
+export ATIS_ENV=production
+export SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+export DATABASE_URL=postgresql+psycopg2://user:pass@host:5432/atis_db
+
+python3 -m flask --app app db upgrade        # apply migrations (incl. password hashing)
+python3 -m flask --app app create-admin      # create the first admin (hashed password)
+
+gunicorn app:app                             # run behind a WSGI server (not app.py)
+```
+
+Security features active in every environment: hashed passwords, CSRF protection
+on all form posts, login rate limiting, upload size cap + image content
+validation, HTTPOnly/SameSite session cookies, and `debug` off unless
+`FLASK_DEBUG=1`. See `.env.example` for all tunables.
+
+## CLI Model Commands
+
+Prepare the dataset:
+
+```bash
+python3 prepare_dataset.py
+```
+
+Train:
+
+```bash
+python3 train_model.py
+```
+
+Set a device explicitly only when needed:
+
+```bash
+YOLO_DEVICE=0 python3 train_model.py
+YOLO_DEVICE=cpu python3 train_model.py
+```
+
+Evaluate:
+
+```bash
+python3 evaluate_model.py
+```
+
+Run single-image inference:
+
+```bash
+python3 test_tyre.py
+```
+
+## Live Camera Inspection
+
+The live workflow is Python-only and uses OpenCV windows, not a browser camera.
+It assumes a fixed toll-booth camera position and calibrated tire scan zones.
+
+Install dependencies, then calibrate zones:
+
+```bash
+python3 calibrate_live_zones.py --camera 0
+```
+
+In the calibration window:
+
+- Drag one or more tire scan zones.
+- Press `s` to save to `config/live_zones.json`.
+- Press `c` to clear zones.
+- Press `q` to quit without saving.
+
+Run live inspection:
+
+```bash
+python3 live_video_inspection.py --camera 0
+```
+
+The dashboard also has a live camera area at:
+
+```text
+http://127.0.0.1:5000/live
+```
+
+That page renders the same Python/OpenCV analysis as an MJPEG stream from
+`/live/stream`. It does not use browser webcam APIs. Configure it with
+environment variables such as `ATIS_LIVE_CAMERA`, `ATIS_LIVE_ZONES`,
+`ATIS_LIVE_DB_LOG`, `ATIS_LIVE_UNSAFE_STREAK`, and `ATIS_LIVE_COOLDOWN`.
+`ATIS_LIVE_CAMERA` can be camera index `0`, a video file path, or an OpenCV
+supported stream URL.
+
+Runtime keys:
+
+- `q` quits.
+- `p` pauses or resumes analysis.
+- `r` resets live streak counters.
+
+Live logging defaults:
+
+- An unsafe event is logged after 3 unsafe predictions in a row for the same zone.
+- Each zone has a 20 second cooldown after logging.
+- Logged frames are saved under `static/uploads/` and appear in dashboard history/alerts.
+- Use `--no-db-log` to display live predictions without writing dashboard records.
+
+## Current Model Artifact
+
+The included run was trained for 50 epochs. The last logged top-1 validation
+accuracy is about 82.46%, with the best logged top-1 accuracy about 83.39%.
+
+The current classifier labels only two classes:
+
+- `normal` -> dashboard status `safe`
+- `cracked` -> dashboard status `unsafe`, defect `Cracking`
+
+The inference code is ready to map a future `bulge` class to `unsafe`, but the
+current model cannot truly detect bulges until you add `bulge` training and
+validation images and retrain.
+
+## PostgreSQL Option
+
+SQLite is the local default. To use PostgreSQL instead:
+
+```bash
+cp .env.example .env
+# Edit DATABASE_URL in .env
+python3 -m flask --app app db upgrade
+python3 migrate_sqlite_to_postgres.py
+```
+
+Use `python3 migrate_sqlite_to_postgres.py --replace` only when intentionally
+replacing existing PostgreSQL rows.

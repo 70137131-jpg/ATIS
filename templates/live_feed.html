@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}NHA - Live Camera{% endblock %}
+{% block description %}NHA live tire inspection feed{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/live_feed.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <span class="official-kicker">Live Operations</span>
+        <h1 class="page-title">Live Tire Inspection</h1>
+        <p class="page-subtitle">Server-side Python/OpenCV stream with calibrated tire scan zones.</p>
+    </div>
+    <a href="{{ url_for('alerts') }}" class="details-btn">
+        <span class="btn-label">View Alerts</span>
+    </a>
+</div>
+
+<div class="live-layout">
+    <section class="live-stream-panel" aria-label="Live tire inspection stream">
+        <div class="live-stream-toolbar">
+            <div class="live-feed-state">
+                <span class="live-pulse"></span>
+                <span>Live Python stream</span>
+            </div>
+            <div class="live-feed-meta">
+                <span>Camera {{ camera_source }}</span>
+                <span>{{ zones_path }}</span>
+            </div>
+        </div>
+
+        <div class="live-video-shell">
+            <img
+                class="live-video"
+                src="{{ url_for('live_stream') }}"
+                alt="Live ATIS tire inspection video stream"
+            >
+        </div>
+    </section>
+
+    <aside class="live-side-panel" aria-label="Live inspection settings">
+        <div class="live-side-header">
+            <span class="live-side-kicker">Inspection Rules</span>
+            <h2>Live Configuration</h2>
+        </div>
+
+        <dl class="live-meta-list">
+            <div class="live-meta-row">
+                <dt>Zones</dt>
+                <dd class="{{ 'status-ok' if zones_configured else 'status-warning' }}">
+                    {{ 'Configured' if zones_configured else 'Needs calibration' }}
+                </dd>
+            </div>
+            <div class="live-meta-row">
+                <dt>DB logging</dt>
+                <dd class="{{ 'status-ok' if db_logging else 'status-muted' }}">
+                    {{ 'Enabled' if db_logging else 'Off' }}
+                </dd>
+            </div>
+            <div class="live-meta-row">
+                <dt>Unsafe rule</dt>
+                <dd>{{ unsafe_streak }} in a row</dd>
+            </div>
+            <div class="live-meta-row">
+                <dt>Cooldown</dt>
+                <dd>{{ cooldown }}s</dd>
+            </div>
+            <div class="live-meta-row">
+                <dt>Analysis rate</dt>
+                <dd>{{ analyze_interval }}s</dd>
+            </div>
+            <div class="live-meta-row">
+                <dt>Motion gate</dt>
+                <dd>{{ motion_threshold }}</dd>
+            </div>
+        </dl>
+
+        <div class="live-note">
+            <strong>Calibration file</strong>
+            <span>{{ zones_path }}</span>
+        </div>
+    </aside>
+</div>
+{% endblock %}

@@ -10,6 +10,8 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_MODEL_CANDIDATES = (
     "runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt",
+    # 100-epoch weights committed via Git LFS land under a doubly-nested path.
+    "runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt",
     "ATIS_Project/tyre_safety_model/weights/best.pt",
     "runs/classify/train/weights/best.pt",
 )
@@ -130,6 +132,13 @@ def _classify_model_input(
     threshold = get_conf_threshold()
     status, defects = _status_for_class(predicted_class, conf_fraction, threshold)
 
+    # Full per-class probabilities for transparency/audit (e.g. operator review).
+    prob_vector = result.probs.data.tolist()
+    class_probs = {
+        _class_name(result.names, i).strip().lower(): float(prob_vector[i])
+        for i in range(len(prob_vector))
+    }
+
     return {
         "status": status,
         "confidence": max(0, min(100, int(round(conf_fraction * 100)))),
@@ -137,6 +146,8 @@ def _classify_model_input(
         "predicted_class": predicted_class,
         "threshold": round(threshold * 100),
         "low_confidence": status == "unsafe" and predicted_class.strip().lower() == "normal",
+        "prob_normal": round(class_probs.get("normal", 0.0) * 100),
+        "prob_cracked": round(class_probs.get("cracked", 0.0) * 100),
         "model_path": str(_classifier_path or find_model_path() or ""),
     }
 
