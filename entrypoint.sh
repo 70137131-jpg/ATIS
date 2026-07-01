@@ -7,7 +7,15 @@
 set -e
 
 echo "==> Running database migrations …"
-flask --app app db upgrade 2>/dev/null || echo "    (migrations skipped — tables created via db.create_all)"
+# Try to upgrade. If it fails (e.g. relation "users" already exists because 
+# db.create_all() was run on the first deploy instead of alembic), we stamp the
+# DB as being at the initial 0001 state, then run upgrade again to apply 0002/0003.
+if ! flask --app app db upgrade 2>/dev/null; then
+    echo "    (initial upgrade failed; stamping DB as 0001 and retrying)"
+    flask --app app db stamp 0001_initial_postgresql_schema 2>/dev/null || true
+    flask --app app db upgrade
+fi
+
 
 # Create a default admin if ATIS_ADMIN_EMAIL and ATIS_ADMIN_PASSWORD are set and
 # no admin exists yet.  This lets the first deploy be fully automated.
