@@ -59,6 +59,7 @@
 }
 
 .live-video-shell {
+    position: relative;
     width: 100%;
     aspect-ratio: 16 / 9;
     background: #06130e;
@@ -158,6 +159,162 @@
     font-size: 0.76rem;
     line-height: 1.45;
     overflow-wrap: anywhere;
+}
+
+/* --- Camera activation button + overlay ------------------------------- */
+
+.live-camera-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1.25rem;
+    background: radial-gradient(120% 120% at 50% 40%, rgba(9, 27, 20, 0.72), rgba(3, 10, 7, 0.92));
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+/* Hidden once the stream is live, but the video keeps playing underneath. */
+.live-camera-overlay.is-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.live-camera-overlay-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    max-width: 360px;
+}
+
+.live-camera-icon {
+    font-size: 2.4rem;
+    line-height: 1;
+    filter: grayscale(0.15);
+}
+
+.live-camera-hint {
+    margin: 0;
+    color: #f4f7f5;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.live-camera-subhint {
+    margin: 0.15rem 0 0;
+    color: rgba(226, 236, 231, 0.72);
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
+.camera-activate-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.35rem;
+    padding: 0.8rem 1.6rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--green);
+    color: #ffffff;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    box-shadow: 0 8px 22px rgba(22, 132, 95, 0.35);
+    transition: transform 0.12s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.camera-activate-btn:hover {
+    background: #12734f;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 26px rgba(22, 132, 95, 0.45);
+}
+
+.camera-activate-btn:active {
+    transform: translateY(0);
+}
+
+.camera-activate-btn:disabled {
+    cursor: default;
+    opacity: 0.85;
+    box-shadow: none;
+}
+
+/* Spinner shows only while connecting (overlay data-state="connecting"). */
+.camera-btn-spinner {
+    display: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    border-top-color: #ffffff;
+    animation: camera-spin 0.7s linear infinite;
+}
+
+.live-camera-overlay[data-state="connecting"] .camera-btn-spinner {
+    display: inline-block;
+}
+
+@keyframes camera-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Floating stop control, shown only while live. */
+.camera-stop-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 999px;
+    background: rgba(10, 22, 16, 0.66);
+    color: #ffffff;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.camera-stop-btn:hover {
+    background: rgba(160, 30, 30, 0.72);
+    border-color: rgba(255, 255, 255, 0.45);
+}
+
+.camera-stop-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: #ef4444;
+}
+
+/* State chip pulse colour reflects camera status. */
+#cameraState[data-state="off"] .live-pulse {
+    background: var(--text-muted);
+    box-shadow: none;
+}
+
+#cameraState[data-state="connecting"] .live-pulse {
+    background: var(--orange, #d97706);
+    box-shadow: 0 0 0 5px rgba(217, 119, 6, 0.14);
+}
+
+#cameraState[data-state="live"] .live-pulse {
+    background: var(--green);
+    box-shadow: 0 0 0 5px rgba(22, 132, 95, 0.14);
+    animation: camera-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes camera-pulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(22, 132, 95, 0.16); }
+    50% { box-shadow: 0 0 0 7px rgba(22, 132, 95, 0.05); }
 }
 
 @media (max-width: 1100px) {

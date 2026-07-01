@@ -22,9 +22,9 @@
 <div class="live-layout">
     <section class="live-stream-panel" aria-label="Live tire inspection stream">
         <div class="live-stream-toolbar">
-            <div class="live-feed-state">
+            <div class="live-feed-state" id="cameraState" data-state="off">
                 <span class="live-pulse"></span>
-                <span>Live Python stream</span>
+                <span class="live-state-label">Camera off</span>
             </div>
             <div class="live-feed-meta">
                 <span>Camera {{ camera_source }}</span>
@@ -35,9 +35,29 @@
         <div class="live-video-shell">
             <img
                 class="live-video"
-                src="{{ url_for('live_stream') }}"
+                id="liveVideo"
+                data-stream="{{ url_for('live_stream') }}"
                 alt="Live ATIS tire inspection video stream"
             >
+
+            <div class="live-camera-overlay" id="cameraOverlay" data-state="off">
+                <div class="live-camera-overlay-inner">
+                    <span class="live-camera-icon" aria-hidden="true">&#128247;</span>
+                    <p class="live-camera-hint" id="cameraHint">Camera is off</p>
+                    <button type="button" class="camera-activate-btn" id="cameraToggle">
+                        <span class="camera-btn-spinner" aria-hidden="true"></span>
+                        <span class="camera-btn-label">Activate Camera</span>
+                    </button>
+                    <p class="live-camera-subhint">
+                        Starts the server webcam (source {{ camera_source }}) and begins
+                        live tire scanning.
+                    </p>
+                </div>
+            </div>
+
+            <button type="button" class="camera-stop-btn" id="cameraStop" hidden>
+                <span class="camera-stop-dot" aria-hidden="true"></span> Stop Camera
+            </button>
         </div>
     </section>
 
@@ -84,4 +104,8 @@
         </div>
     </aside>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/live_feed.js') }}"></script>
 {% endblock %}
