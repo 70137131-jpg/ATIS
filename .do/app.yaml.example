@@ -1,0 +1,70 @@
+name: atis
+region: nyc
+
+services:
+  - name: web
+    github:
+      repo: 70137131-jpg/ATIS
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    dockerfile_path: Dockerfile
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-2gb
+    envs:
+      - key: ATIS_ENV
+        value: production
+        scope: RUN_TIME
+        type: GENERAL
+      - key: SECRET_KEY
+        value: replace-with-a-generated-secret
+        scope: RUN_TIME
+        type: SECRET
+      - key: ATIS_SEED_DEMO
+        value: "1"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: DATABASE_URL
+        value: ${postgres-db.DATABASE_URL}
+        scope: RUN_TIME
+        type: GENERAL
+      - key: WEB_CONCURRENCY
+        value: "1"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: GUNICORN_THREADS
+        value: "4"
+        scope: RUN_TIME
+        type: GENERAL
+      - key: ATIS_ADMIN_EMAIL
+        value: admin@atis.com
+        scope: RUN_TIME
+        type: GENERAL
+      - key: ATIS_ADMIN_PASSWORD
+        value: replace-with-a-strong-admin-password
+        scope: RUN_TIME
+        type: SECRET
+    alerts:
+      - rule: MEM_UTILIZATION
+        operator: GREATER_THAN
+        value: 85
+        window: FIVE_MINUTES
+
+databases:
+  - name: postgres-db
+    engine: PG
+    version: "18"
+    production: false
+
+ingress:
+  rules:
+    - match:
+        path:
+          prefix: /
+      component:
+        name: web
+
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED

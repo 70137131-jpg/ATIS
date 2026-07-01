@@ -10,6 +10,7 @@
     var cfg = document.getElementById("liveConfig");
     var video = document.getElementById("liveVideo");
     var canvas = document.getElementById("liveCanvas");
+    var boxCanvas = document.getElementById("liveBoxCanvas");
     var toggleBtn = document.getElementById("cameraToggle");
     var stopBtn = document.getElementById("cameraStop");
     var captureBtn = document.getElementById("cameraCapture");
@@ -41,6 +42,132 @@
     var loopTimer = null;
     var analysing = false;
 
+    function clearFrameBoxes() {
+        if (!boxCanvas) return;
+        var ctx = boxCanvas.getContext("2d");
+        ctx.clearRect(0, 0, boxCanvas.width, boxCanvas.height);
+    }
+
+    function syncBoxCanvas() {
+        if (!boxCanvas) return null;
+        var rect = boxCanvas.getBoundingClientRect();
+        var dpr = window.devicePixelRatio || 1;
+        var width = Math.max(1, Math.round(rect.width * dpr));
+        var height = Math.max(1, Math.round(rect.height * dpr));
+        if (boxCanvas.width !== width || boxCanvas.height !== height) {
+            boxCanvas.width = width;
+            boxCanvas.height = height;
+        }
+        var ctx = boxCanvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        return { ctx: ctx, width: rect.width, height: rect.height };
+    }
+
+    function visibleVideoRect(width, height) {
+        var sourceW = video.videoWidth || width;
+        var sourceH = video.videoHeight || height;
+        var sourceRatio = sourceW / sourceH;
+        var canvasRatio = width / height;
+        var fit = window.getComputedStyle(video).objectFit || "contain";
+        var rect = { x: 0, y: 0, width: width, height: height };
+
+        if (fit === "contain" && canvasRatio > sourceRatio) {
+            rect.width = height * sourceRatio;
+            rect.x = (width - rect.width) / 2;
+        } else if (fit === "contain") {
+            rect.height = width / sourceRatio;
+            rect.y = (height - rect.height) / 2;
+        } else if (fit === "cover" && canvasRatio > sourceRatio) {
+            rect.height = width / sourceRatio;
+            rect.y = (height - rect.height) / 2;
+        } else if (fit === "cover") {
+            rect.width = height * sourceRatio;
+            rect.x = (width - rect.width) / 2;
+        }
+
+        return rect;
+    }
+
+    function normalizeBox(box) {
+        if (!box) return null;
+        if (Array.isArray(box.bbox)) {
+            return {
+                x1: Number(box.bbox[0]),
+                y1: Number(box.bbox[1]),
+                x2: Number(box.bbox[2]),
+                y2: Number(box.bbox[3])
+            };
+        }
+        if ("x" in box && "y" in box && "width" in box && "height" in box) {
+            return {
+                x1: Number(box.x),
+                y1: Number(box.y),
+                x2: Number(box.x) + Number(box.width),
+                y2: Number(box.y) + Number(box.height)
+            };
+        }
+        return {
+            x1: Number(box.x1),
+            y1: Number(box.y1),
+            x2: Number(box.x2),
+            y2: Number(box.y2)
+        };
+    }
+
+    function drawFrameBoxes(boxes) {
+        var canvasState = syncBoxCanvas();
+        if (!canvasState || !Array.isArray(boxes) || !boxes.length) return;
+
+        var ctx = canvasState.ctx;
+        var videoRect = visibleVideoRect(canvasState.width, canvasState.height);
+
+        boxes.forEach(function (box) {
+            var normalized = normalizeBox(box);
+            if (!normalized) return;
+
+            var boxMax = Math.max(normalized.x1, normalized.y1, normalized.x2, normalized.y2);
+            var x1 = normalized.x1;
+            var y1 = normalized.y1;
+            var x2 = normalized.x2;
+            var y2 = normalized.y2;
+            if (boxMax <= 1) {
+                x1 *= videoRect.width;
+                x2 *= videoRect.width;
+                y1 *= videoRect.height;
+                y2 *= videoRect.height;
+            }
+
+            x1 += videoRect.x;
+            x2 += videoRect.x;
+            y1 += videoRect.y;
+            y2 += videoRect.y;
+
+            var color = box.status === "safe" ? "#22c55e" : "#ef4444";
+            var width = Math.max(2, x2 - x1);
+            var height = Math.max(2, y2 - y1);
+            var label = [box.label || box.predicted_class || "tire", box.confidence ? box.confidence + "%" : ""]
+                .filter(Boolean)
+                .join(" ");
+
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = color;
+            ctx.fillStyle = "rgba(6, 19, 14, 0.76)";
+            ctx.strokeRect(x1, y1, width, height);
+
+            if (label) {
+                ctx.font = "700 13px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+                var metrics = ctx.measureText(label);
+                var labelW = Math.min(metrics.width + 16, Math.max(width, 80));
+                var labelY = Math.max(0, y1 - 28);
+                ctx.fillStyle = color;
+                ctx.fillRect(x1, labelY, labelW, 24);
+                ctx.fillStyle = "#ffffff";
+                ctx.fillText(label, x1 + 8, labelY + 16);
+            }
+        });
+    }
+
     function setState(next) {
         state = next;
         if (stateChip) stateChip.dataset.state = next;
@@ -60,6 +187,7 @@
             stopBtn.hidden = true;
             captureBtn.hidden = true;
             badge.hidden = true;
+            clearFrameBoxes();
         }
         toggleBtn.disabled = next === "connecting";
         if (toggleLabel) {
@@ -131,6 +259,7 @@
         if (resClass) resClass.textContent = cls || "—";
         if (resConfidence) resConfidence.textContent = conf || "—";
         if (resDefects) resDefects.textContent = (data.defects && data.defects.length) ? data.defects.join(", ") : "None";
+        drawFrameBoxes(data.boxes || data.bounding_boxes || data.detections || []);
     }
 
     function scheduleAnalyze() {
@@ -197,6 +326,7 @@
     toggleBtn.addEventListener("click", function () { if (state === "off") startCamera(); });
     stopBtn.addEventListener("click", stopCamera);
     captureBtn.addEventListener("click", captureAndLog);
+    window.addEventListener("resize", clearFrameBoxes);
     window.addEventListener("beforeunload", function () { if (stream) stopCamera(); });
 
     setState("off");

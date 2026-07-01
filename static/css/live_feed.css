@@ -75,6 +75,15 @@
     background: #06130e;
 }
 
+.live-box-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
+}
+
 .live-side-panel {
     padding: 1rem;
 }
@@ -173,6 +182,7 @@
     padding: 1.25rem;
     background: radial-gradient(120% 120% at 50% 40%, rgba(9, 27, 20, 0.72), rgba(3, 10, 7, 0.92));
     transition: opacity 0.25s ease, visibility 0.25s ease;
+    z-index: 4;
 }
 
 /* Hidden once the stream is live, but the video keeps playing underneath. */
@@ -268,6 +278,7 @@
     position: absolute;
     top: 12px;
     right: 12px;
+    z-index: 3;
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -295,11 +306,11 @@
     background: #ef4444;
 }
 
-/* Browser <video> fills the shell like the old <img> did. */
+/* Browser <video> shows the full analyzed frame so YOLO boxes stay visible. */
 video.live-video {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     background: #06130e;
 }
 
@@ -308,6 +319,7 @@ video.live-video {
     position: absolute;
     top: 12px;
     left: 12px;
+    z-index: 3;
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
@@ -339,6 +351,7 @@ video.live-video {
     bottom: 14px;
     left: 50%;
     transform: translateX(-50%);
+    z-index: 3;
     padding: 0.6rem 1.3rem;
     border: 0;
     border-radius: 999px;

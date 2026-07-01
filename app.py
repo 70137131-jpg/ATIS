@@ -57,6 +57,14 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 
+DEMO_USER_CREDENTIALS = [
+    ("admin@atis.com", "admin123", "Admin"),
+    ("operator@atis.com", "operator123", "Operator"),
+    ("operator@nha.gov.pk", "operator123", "Operator"),
+    ("supervisor@atis.com", "super123", "Supervisor"),
+    ("inspector@atis.com", "inspect123", "Inspector"),
+]
+
 # Initialize the Flask application
 app = Flask(__name__)
 
@@ -99,6 +107,22 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "webp"}
 db.init_app(app)
 migrate = Migrate(app, db)
 
+
+def ensure_demo_users():
+    """Create missing demo accounts without overwriting existing passwords."""
+    created = 0
+    for email, password, role in DEMO_USER_CREDENTIALS:
+        if User.query.filter_by(email=email).first():
+            continue
+        user = User(email=email, role=role)
+        user.set_password(password)
+        db.session.add(user)
+        created += 1
+
+    if created:
+        db.session.commit()
+        app.logger.info("Seeded %s demo user(s).", created)
+
 # Ensure all tables exist on boot.
 with app.app_context():
     db.create_all()
@@ -126,6 +150,9 @@ with app.app_context():
                     stamp(revision="head")
         except ImportError:
             pass
+
+    if Config.SEED_DEMO_DATA:
+        ensure_demo_users()
 
 # CSRF protection for all state-changing form posts.
 csrf = CSRFProtect(app)
@@ -532,8 +559,8 @@ def logout():
     return redirect(url_for("login"))
 
 
-@csrf.exempt
 @app.route("/api/live/analyze", methods=["POST"])
+@csrf.exempt
 def live_analyze():
     """Classify a single frame captured by the operator's browser camera.
 
@@ -562,13 +589,20 @@ def live_analyze():
         app.logger.warning("Live analyze inference failed: %s", exc)
         return jsonify({"error": "inference failed"}), 500
 
+    frame_box = {
+        "label": prediction["predicted_class"],
+        "confidence": prediction["confidence"],
+        "status": prediction["status"],
+        "bbox": [0, 0, 1, 1],
+    }
+
     return jsonify({
         key: prediction[key]
         for key in (
             "status", "confidence", "defects",
             "predicted_class", "threshold", "low_confidence",
         )
-    })
+    } | {"boxes": [frame_box], "bounding_boxes": [frame_box]})
 
 
 # -------------------------------------------------------------------------

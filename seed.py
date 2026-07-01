@@ -6,7 +6,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from datetime import datetime, timedelta
-from app import app
+from app import DEMO_USER_CREDENTIALS, app
 from models import db, User, Inspection, Alert
 
 
@@ -18,14 +18,8 @@ def seed():
         print("✓ Tables dropped and recreated.")
 
         # ── Users (passwords stored hashed via set_password) ──
-        user_credentials = [
-            ("admin@atis.com",      "admin123",    "Admin"),
-            ("operator@atis.com",   "operator123", "Operator"),
-            ("supervisor@atis.com", "super123",    "Supervisor"),
-            ("inspector@atis.com",  "inspect123",  "Inspector"),
-        ]
         users = []
-        for email, password, role in user_credentials:
+        for email, password, role in DEMO_USER_CREDENTIALS:
             user = User(email=email, role=role)
             user.set_password(password)
             users.append(user)

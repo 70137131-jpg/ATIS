@@ -91,6 +91,14 @@ def test_live_analyze_classifies_a_frame(auth_client, app, monkeypatch):
     body = resp.get_json()
     assert body["status"] == "unsafe"
     assert "Cracking" in body["defects"]
+    assert body["boxes"] == [
+        {
+            "label": "cracked",
+            "confidence": 93,
+            "status": "unsafe",
+            "bbox": [0, 0, 1, 1],
+        }
+    ]
 
 
 def test_live_analyze_requires_auth(client):
