@@ -590,7 +590,7 @@ def live_analyze():
         return jsonify({"error": "inference failed"}), 500
 
     frame_box = {
-        "label": prediction["predicted_class"],
+        "label": "Not a tyre" if prediction["predicted_class"] == "not_tyre" else prediction["predicted_class"],
         "confidence": prediction["confidence"],
         "status": prediction["status"],
         "bbox": [0, 0, 1, 1],
@@ -698,7 +698,7 @@ def predict():
     db.session.flush()  # Get the ID
 
     # --- 6. Auto-create Alert if unsafe ---
-    if status == "unsafe":
+    if status == "unsafe" and predicted_class != "not_tyre":
         alert = Alert(
             inspection_id=inspection.id,
             status="pending",

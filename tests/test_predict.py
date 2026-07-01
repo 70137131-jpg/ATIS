@@ -66,6 +66,37 @@ def test_unsafe_prediction_creates_pending_alert(auth_client, app, monkeypatch, 
         assert alerts[0].status == "pending"
 
 
+def test_not_tyre_prediction_is_stored_without_alert(auth_client, app, monkeypatch, tmp_path):
+    monkeypatch.setattr(atis_app, "UPLOAD_FOLDER", str(tmp_path))
+    monkeypatch.setattr(
+        atis_app,
+        "classify_tyre_image",
+        lambda *_a, **_k: {
+            "status": "unsafe",
+            "confidence": 0,
+            "defects": ["Not a tyre"],
+            "predicted_class": "not_tyre",
+            "threshold": 60,
+            "low_confidence": False,
+            "model_path": "test",
+        },
+    )
+
+    resp = auth_client.post(
+        "/predict",
+        data={"image": (make_jpeg(), "not_tyre.jpg"), "location": "Live Camera"},
+        content_type="multipart/form-data",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["predicted_class"] == "not_tyre"
+    assert body["defects"] == ["Not a tyre"]
+
+    with app.app_context():
+        assert Alert.query.filter_by(inspection_id=body["inspection_id"]).count() == 0
+
+
 def test_media_route_serves_stored_image(auth_client, app, monkeypatch, tmp_path):
     resp = _post_predict(auth_client, monkeypatch, tmp_path, status="safe")
     inspection_id = resp.get_json()["inspection_id"]

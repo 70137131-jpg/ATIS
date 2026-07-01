@@ -20,9 +20,30 @@ DEFAULT_MODEL_CANDIDATES = (
 # auto-passed as safe. The model is a 2-class softmax, so the winning class is
 # always >= 0.50; a meaningful threshold sits above that.
 DEFAULT_CONF_THRESHOLD = 0.60
+DEFAULT_OBJECT_CONF_THRESHOLD = 0.35
+
+OBJECT_MODEL_CANDIDATES = (
+    "yolo26n.pt",
+)
+
+VEHICLE_CLASSES = {"bicycle", "car", "motorcycle", "bus", "truck"}
+NON_TYRE_OBJECT_CLASSES = {
+    "person", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear",
+    "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase",
+    "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat",
+    "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle",
+    "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+    "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut",
+    "cake", "chair", "couch", "potted plant", "bed", "dining table", "toilet",
+    "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave",
+    "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase",
+    "scissors", "teddy bear", "hair drier", "toothbrush",
+}
 
 _classifier_model = None
 _classifier_path: Path | None = None
+_object_model = None
+_object_model_path: Path | None = None
 
 
 def candidate_model_paths() -> list[Path]:
@@ -62,6 +83,37 @@ def get_conf_threshold() -> float:
     return min(max(value, 0.0), 1.0)
 
 
+def get_object_conf_threshold() -> float:
+    """Confidence threshold for the optional non-tyre object gate."""
+    raw = os.environ.get("ATIS_OBJECT_CONF_THRESHOLD")
+    if not raw:
+        return DEFAULT_OBJECT_CONF_THRESHOLD
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_OBJECT_CONF_THRESHOLD
+    if value > 1:
+        value = value / 100
+    return min(max(value, 0.0), 1.0)
+
+
+def tyre_gate_enabled() -> bool:
+    """Return whether non-tyre rejection is enabled."""
+    raw = os.environ.get("ATIS_TYRE_GATE", "1")
+    return raw.strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+def find_object_model_path() -> Path | None:
+    """Return the optional COCO detector used to reject obvious non-tyre frames."""
+    env_path = os.environ.get("ATIS_OBJECT_MODEL_PATH")
+    candidates = [Path(env_path).expanduser()] if env_path else []
+    candidates.extend(PROJECT_ROOT / relative_path for relative_path in OBJECT_MODEL_CANDIDATES)
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
 def load_classifier(model_path: str | os.PathLike[str] | None = None) -> Any:
     """Lazy-load the trained Ultralytics classification model."""
     global _classifier_model, _classifier_path
@@ -79,6 +131,24 @@ def load_classifier(model_path: str | os.PathLike[str] | None = None) -> Any:
         _classifier_path = resolved_path
 
     return _classifier_model
+
+
+def load_object_detector() -> Any | None:
+    """Lazy-load the optional COCO detector for non-tyre rejection."""
+    global _object_model, _object_model_path
+
+    resolved_path = find_object_model_path()
+    if resolved_path is None:
+        return None
+
+    resolved_path = resolved_path.resolve()
+    if _object_model is None or _object_model_path != resolved_path:
+        from ultralytics import YOLO
+
+        _object_model = YOLO(str(resolved_path))
+        _object_model_path = resolved_path
+
+    return _object_model
 
 
 def _class_name(names: Any, class_id: int) -> str:
@@ -113,6 +183,113 @@ def _status_for_class(
     return "unsafe", [f"Unexpected class: {predicted_class}"]
 
 
+def _frame_array(model_input: Any) -> Any | None:
+    """Return an OpenCV/Numpy image array for quick non-tyre checks."""
+    try:
+        import cv2
+        import numpy as np
+    except Exception:  # noqa: BLE001 - gate is best-effort
+        return None
+
+    if isinstance(model_input, (str, os.PathLike)):
+        frame = cv2.imread(str(model_input))
+        return frame if frame is not None else None
+
+    if isinstance(model_input, np.ndarray):
+        return model_input
+
+    return None
+
+
+def _flat_frame_reason(model_input: Any) -> str | None:
+    """Reject blank/flat frames that the 2-class classifier otherwise over-passes."""
+    frame = _frame_array(model_input)
+    if frame is None:
+        return None
+
+    try:
+        import cv2
+        import numpy as np
+
+        if frame.ndim == 3:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = frame
+        if gray.size == 0:
+            return "Not a tyre"
+
+        contrast = float(np.std(gray))
+        edges = cv2.Canny(gray, 80, 160)
+        edge_density = float(np.count_nonzero(edges)) / float(edges.size)
+
+        if contrast < 10 or edge_density < 0.003:
+            return "Not a tyre"
+    except Exception:  # noqa: BLE001 - never let the gate break inference
+        return None
+
+    return None
+
+
+def _detected_non_tyre_reason(model_input: Any) -> str | None:
+    """Use a generic object detector to reject obvious non-tyre subjects."""
+    detector = load_object_detector()
+    if detector is None:
+        return None
+
+    try:
+        threshold = get_object_conf_threshold()
+        results = detector(model_input, imgsz=320, conf=threshold, verbose=False)
+        if not results:
+            return None
+
+        names = results[0].names
+        boxes = getattr(results[0], "boxes", None)
+        if boxes is None or boxes.cls is None or boxes.conf is None:
+            return None
+
+        detections: list[tuple[str, float]] = []
+        for class_id, conf in zip(boxes.cls.tolist(), boxes.conf.tolist()):
+            name = _class_name(names, int(class_id)).strip().lower()
+            detections.append((name, float(conf)))
+
+        if any(name in VEHICLE_CLASSES for name, conf in detections if conf >= threshold):
+            return None
+
+        non_tyre_hits = [
+            (name, conf)
+            for name, conf in detections
+            if conf >= threshold and name in NON_TYRE_OBJECT_CLASSES
+        ]
+        if not non_tyre_hits:
+            return None
+
+        name, _conf = max(non_tyre_hits, key=lambda item: item[1])
+        return f"Not a tyre — detected {name}"
+    except Exception:  # noqa: BLE001 - fall back to classifier if detector fails
+        return None
+
+
+def _non_tyre_reason(model_input: Any) -> str | None:
+    """Return a reason when the input should not be treated as a tyre."""
+    if not tyre_gate_enabled():
+        return None
+    return _flat_frame_reason(model_input) or _detected_non_tyre_reason(model_input)
+
+
+def _not_tyre_result(reason: str, *, model_path: str = "") -> dict[str, Any]:
+    return {
+        "status": "unsafe",
+        "confidence": 0,
+        "defects": [reason or "Not a tyre"],
+        "predicted_class": "not_tyre",
+        "threshold": round(get_conf_threshold() * 100),
+        "low_confidence": False,
+        "prob_normal": 0,
+        "prob_cracked": 0,
+        "model_path": model_path,
+    }
+
+
 def _classify_model_input(
     model_input: Any,
     model_path: str | os.PathLike[str] | None = None,
@@ -138,6 +315,14 @@ def _classify_model_input(
         _class_name(result.names, i).strip().lower(): float(prob_vector[i])
         for i in range(len(prob_vector))
     }
+
+    if status == "safe":
+        reason = _non_tyre_reason(model_input)
+        if reason:
+            return _not_tyre_result(
+                reason,
+                model_path=str(_classifier_path or find_model_path() or ""),
+            )
 
     return {
         "status": status,

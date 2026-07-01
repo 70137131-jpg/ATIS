@@ -254,10 +254,13 @@
         badge.dataset.status = status;
         var conf = (typeof data.confidence === "number") ? data.confidence + "%" : "";
         var cls = data.predicted_class || "";
-        badgeText.textContent = (status ? status.toUpperCase() : "—") + (conf ? " · " + conf : "");
+        var isNotTyre = cls === "not_tyre";
+        badgeText.textContent = isNotTyre
+            ? "NOT A TYRE"
+            : (status ? status.toUpperCase() : "—") + (conf ? " · " + conf : "");
         if (resStatus) resStatus.textContent = status || "—";
-        if (resClass) resClass.textContent = cls || "—";
-        if (resConfidence) resConfidence.textContent = conf || "—";
+        if (resClass) resClass.textContent = isNotTyre ? "Not a tyre" : (cls || "—");
+        if (resConfidence) resConfidence.textContent = isNotTyre ? "—" : (conf || "—");
         if (resDefects) resDefects.textContent = (data.defects && data.defects.length) ? data.defects.join(", ") : "None";
         drawFrameBoxes(data.boxes || data.bounding_boxes || data.detections || []);
     }
@@ -299,8 +302,9 @@
         }).then(function (r) { return r.json(); })
           .then(function (data) {
               if (data && data.inspection_id) {
+                  var resultLabel = data.predicted_class === "not_tyre" ? "not a tyre" : (data.status || "");
                   showCapture("Logged inspection #" + data.inspection_id +
-                      " (" + (data.status || "") + ")", data.dashboard_url || data.detail_url || "");
+                      " (" + resultLabel + ")", data.dashboard_url || data.detail_url || "");
               } else {
                   showCapture("Could not log inspection.", "");
               }

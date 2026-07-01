@@ -31,15 +31,18 @@ COPY . .
 # Fallback for deploy platforms where Git-LFS isn't pulled before build (e.g.
 # App Platform). If the model file is a Git-LFS pointer stub (~132 bytes),
 # we download the real file directly from GitHub's raw content endpoint.
-RUN MODEL="runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt"; \
-    if [ ! -f "$MODEL" ]; then \
-      echo "ERROR: model weights not found: $MODEL"; exit 1; \
-    fi; \
-    if head -c 64 "$MODEL" | grep -q "git-lfs"; then \
-      echo "WARNING: $MODEL is a Git-LFS pointer stub. Downloading real weights from GitHub..."; \
-      curl -L -o "$MODEL" "https://github.com/70137131-jpg/ATIS/raw/main/$MODEL" || exit 1; \
-    fi; \
-    echo "Model weights OK ($(wc -c < "$MODEL") bytes)"
+RUN for MODEL in \
+      "runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt" \
+      "yolo26n.pt"; do \
+      if [ ! -f "$MODEL" ]; then \
+        echo "ERROR: model weights not found: $MODEL"; exit 1; \
+      fi; \
+      if head -c 64 "$MODEL" | grep -q "git-lfs"; then \
+        echo "WARNING: $MODEL is a Git-LFS pointer stub. Downloading real weights from GitHub..."; \
+        curl -L -o "$MODEL" "https://github.com/70137131-jpg/ATIS/raw/main/$MODEL" || exit 1; \
+      fi; \
+      echo "Model weights OK: $MODEL ($(wc -c < "$MODEL") bytes)"; \
+    done
 
 EXPOSE 8080
 
