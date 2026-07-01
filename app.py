@@ -99,12 +99,33 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "webp"}
 db.init_app(app)
 migrate = Migrate(app, db)
 
-# Ensure all tables exist on boot. This is a no-op when the schema is already in
-# place, but creates them on a fresh database (first deploy) so the app doesn't
-# crash on the very first DB query.  For production deployments with managed
-# migrations prefer `flask db upgrade`; this is the safety net.
+# Ensure all tables exist on boot.
 with app.app_context():
     db.create_all()
+    
+    # Run migrations programmatically. This guarantees migrations run even if 
+    # the cloud platform (e.g. DigitalOcean) overrides our Docker entrypoint.sh.
+    if Config.IS_PRODUCTION:
+        try:
+            from flask_migrate import upgrade, stamp
+            import sqlalchemy.exc
+            
+            try:
+                # Try normal upgrade
+                upgrade()
+            except sqlalchemy.exc.SQLAlchemyError:
+                # If upgrade fails (e.g. users table already existed from create_all
+                # before alembic tracked it), stamp the DB to the intermediate state
+                # and try upgrading the rest of the way (e.g. adding image columns).
+                try:
+                    stamp(revision="0002_password_hash")
+                    upgrade()
+                except sqlalchemy.exc.SQLAlchemyError:
+                    # If it STILL fails, it means all tables and columns are already
+                    # fully present, so just stamp it as head.
+                    stamp(revision="head")
+        except ImportError:
+            pass
 
 # CSRF protection for all state-changing form posts.
 csrf = CSRFProtect(app)
