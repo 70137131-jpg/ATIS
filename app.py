@@ -7,14 +7,11 @@ It connects the operator dashboard to the trained ATIS tire classifier.
 """
 
 import os
-import time
 import uuid
 from collections import Counter
 from datetime import datetime, timedelta
-from functools import wraps
 from io import BytesIO
 from pathlib import Path
-from types import SimpleNamespace
 
 import click
 from flask import (
@@ -98,9 +95,6 @@ if _sentry_dsn:
 UPLOAD_FOLDER = os.path.join(app.static_folder, "uploads")
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "webp"}
 
-# Live camera configuration
-LIVE_DEFAULT_ZONES = BASE_DIR / "config" / "live_zones.json"
-
 # Initialize the database with the app
 db.init_app(app)
 migrate = Migrate(app, db)
@@ -179,292 +173,12 @@ def require_authenticated_session():
     return None
 
 
-def login_required(view):
-    """Decorator enforcing an authenticated session for a single view."""
-    @wraps(view)
-    def wrapped(*args, **kwargs):
-        if "user" not in session:
-            return _auth_failure_response()
-        return view(*args, **kwargs)
-    return wrapped
-
-
-def role_required(*roles):
-    """Decorator restricting a view to the given roles (e.g. "Admin", "Supervisor").
-
-    Ready for sensitive routes (user management, alert resolution) as they are added.
-    """
-    def decorator(view):
-        @wraps(view)
-        def wrapped(*args, **kwargs):
-            if "user" not in session:
-                return _auth_failure_response()
-            if session.get("role") not in roles:
-                if request.path.startswith("/api/") or wants_json_response():
-                    return jsonify({"error": "Forbidden"}), 403
-                return render_template("403.html"), 403
-            return view(*args, **kwargs)
-        return wrapped
-    return decorator
-
-
 def env_bool(name, default=False):
     """Read a boolean environment variable."""
     raw = os.environ.get(name)
     if raw is None:
         return default
     return raw.strip().lower() not in {"0", "false", "no", "off", ""}
-
-
-def env_float(name, default):
-    """Read a float environment variable with a safe fallback."""
-    try:
-        return float(os.environ.get(name, default))
-    except (TypeError, ValueError):
-        return default
-
-
-def env_int(name, default):
-    """Read an integer environment variable with a safe fallback."""
-    try:
-        return int(os.environ.get(name, default))
-    except (TypeError, ValueError):
-        return default
-
-
-def live_zones_path():
-    """Return the live-zone JSON path.
-
-    Falls back to the bundled ``config/live_zones.example.json`` when no calibrated
-    file exists (e.g. a fresh or hosted deploy, where ``live_zones.json`` is
-    gitignored). This keeps the live view "Configured" out of the box instead of
-    showing "Needs calibration"; operators can still override with ATIS_LIVE_ZONES
-    or by calibrating a real ``live_zones.json``."""
-    raw_path = os.environ.get("ATIS_LIVE_ZONES", str(LIVE_DEFAULT_ZONES))
-    path = Path(raw_path)
-    if not path.is_absolute():
-        path = BASE_DIR / path
-    if not path.exists():
-        example = BASE_DIR / "config" / "live_zones.example.json"
-        if example.exists():
-            return example
-    return path
-
-
-def live_camera_source():
-    """Return the OpenCV camera source, supporting indexes, files, and streams."""
-    raw_source = os.environ.get("ATIS_LIVE_CAMERA", "0").strip() or "0"
-    try:
-        return int(raw_source)
-    except ValueError:
-        path = Path(raw_source)
-        if not path.is_absolute() and (BASE_DIR / path).exists():
-            return str(BASE_DIR / path)
-        return raw_source
-
-
-def live_stream_args():
-    """Build an args-like object compatible with the OpenCV live pipeline."""
-    return SimpleNamespace(
-        analyze_interval=env_float("ATIS_LIVE_ANALYZE_INTERVAL", 0.5),
-        motion_threshold=env_float("ATIS_LIVE_MOTION_THRESHOLD", 8.0),
-        unsafe_streak=env_int("ATIS_LIVE_UNSAFE_STREAK", 3),
-        cooldown=env_float("ATIS_LIVE_COOLDOWN", 20.0),
-        location=os.environ.get("ATIS_LIVE_LOCATION", "Dashboard Live Feed"),
-        camera_label=os.environ.get("ATIS_LIVE_CAMERA_LABEL", "DASHBOARD-LIVE"),
-    )
-
-
-def display_path(path):
-    """Show paths relative to the project when possible."""
-    try:
-        return str(path.relative_to(BASE_DIR))
-    except ValueError:
-        return str(path)
-
-
-def encode_mjpeg_frame(frame):
-    """Encode an OpenCV frame for multipart MJPEG streaming."""
-    import cv2
-
-    ok, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
-    if not ok:
-        return None
-    return b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
-
-
-def live_message_frame(title, lines=None):
-    """Create a readable placeholder frame for camera/config errors."""
-    import cv2
-    import numpy as np
-
-    lines = lines or []
-    frame = np.zeros((720, 1280, 3), dtype=np.uint8)
-    frame[:] = (28, 41, 34)
-    cv2.rectangle(frame, (0, 0), (1280, 72), (16, 41, 31), -1)
-    cv2.putText(frame, "ATIS LIVE", (32, 48), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (66, 197, 244), 3)
-    cv2.putText(frame, title, (60, 220), cv2.FONT_HERSHEY_SIMPLEX, 1.35, (255, 255, 255), 3)
-
-    y = 286
-    for raw_line in lines:
-        for line in str(raw_line).splitlines() or [""]:
-            for start in range(0, len(line), 72):
-                cv2.putText(
-                    frame,
-                    line[start:start + 72],
-                    (60, y),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.72,
-                    (210, 224, 216),
-                    2,
-                )
-                y += 38
-            if not line:
-                y += 38
-        if y > 650:
-            break
-    return frame
-
-
-def live_message_stream(title, lines=None):
-    """Yield an MJPEG error/status frame repeatedly."""
-    while True:
-        payload = encode_mjpeg_frame(live_message_frame(title, lines))
-        if payload:
-            yield payload
-        time.sleep(1.0)
-
-
-def generate_live_frames():
-    """Generate annotated live inspection frames for the dashboard."""
-    try:
-        import cv2
-        from live_video_inspection import (
-            InspectionLogger,
-            RuntimeState,
-            crop_zone,
-            draw_header,
-            draw_zone_overlay,
-            load_zones,
-            maybe_analyze_zone,
-        )
-    except Exception as exc:
-        yield from live_message_stream(
-            "Live video dependency unavailable",
-            ["Install requirements and verify OpenCV/Ultralytics imports.", str(exc)],
-        )
-        return
-
-    zones_path = live_zones_path()
-    try:
-        zones = load_zones(zones_path)
-    except SystemExit as exc:
-        yield from live_message_stream(
-            "Zone calibration required",
-            [str(exc), "Run: python3 calibrate_live_zones.py --camera 0"],
-        )
-        return
-    except Exception as exc:
-        yield from live_message_stream("Could not load live zones", [str(exc)])
-        return
-
-    args = live_stream_args()
-    runtime = RuntimeState(zones)
-    logger = InspectionLogger(
-        enabled=env_bool("ATIS_LIVE_DB_LOG", True),
-        flask_app=app,
-        db_obj=db,
-        inspection_model=Inspection,
-        alert_model=Alert,
-        upload_folder=UPLOAD_FOLDER,
-    )
-
-    source = live_camera_source()
-    cap = cv2.VideoCapture(source)
-    if not cap.isOpened():
-        yield from live_message_stream(
-            "Camera feed unavailable",
-            [
-                f"OpenCV could not open source: {source}",
-                "Check ATIS_LIVE_CAMERA or connect camera index 0.",
-            ],
-        )
-        return
-
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, env_int("ATIS_LIVE_WIDTH", 1280))
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, env_int("ATIS_LIVE_HEIGHT", 720))
-
-    try:
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                if isinstance(source, str) and Path(source).exists():
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    continue
-                payload = encode_mjpeg_frame(live_message_frame("Camera frame read failed"))
-                if payload:
-                    yield payload
-                time.sleep(0.5)
-                continue
-
-            display = frame.copy()
-            now = time.monotonic()
-            for zone in zones:
-                crop, rect = crop_zone(frame, zone)
-                maybe_analyze_zone(
-                    crop,
-                    rect,
-                    runtime.zone_states[zone.name],
-                    args,
-                    logger,
-                    frame.copy(),
-                    zone,
-                    now,
-                )
-                draw_zone_overlay(display, zone, rect, runtime.zone_states[zone.name], args.motion_threshold)
-
-            draw_header(display, args, runtime, controls_text="dashboard stream")
-            payload = encode_mjpeg_frame(display)
-            if payload:
-                yield payload
-    finally:
-        cap.release()
-
-
-DEMO_USERS = [
-    ("admin@atis.com", "admin123", "Admin"),
-    ("operator@atis.com", "operator123", "Operator"),
-    ("supervisor@atis.com", "super123", "Supervisor"),
-    ("inspector@atis.com", "inspect123", "Inspector"),
-]
-
-
-def ensure_local_database():
-    """Create the local SQLite tables and, in development only, seed demo users.
-
-    Demo accounts are NEVER created in production: seeding is gated on both the
-    SQLite backend and Config.SEED_DEMO_DATA (false when ATIS_ENV=production).
-    Passwords are stored hashed via User.set_password().
-    """
-    if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"):
-        return
-
-    with app.app_context():
-        db.create_all()
-
-        if not app.config["SEED_DEMO_DATA"]:
-            return
-        if User.query.count() > 0:
-            return
-
-        for email, password, role in DEMO_USERS:
-            user = User(email=email, role=role)
-            user.set_password(password)
-            db.session.add(user)
-        db.session.commit()
-
-
-ensure_local_database()
 
 
 def warmup_model(fail_hard: bool = False) -> bool:
@@ -768,39 +482,16 @@ def new_inspection():
 def live_feed():
     """
     Live Camera Page.
-    Shows the Python/OpenCV tire inspection stream inside the dashboard.
+    Renders the browser-camera inspection UI; frames are classified via
+    /api/live/analyze (see live_feed.js).
     """
     if "user" not in session:
         return redirect(url_for("login"))
 
-    args = live_stream_args()
-    zones_path = live_zones_path()
     return render_template(
         "live_feed.html",
         user=session["user"],
         role=session["role"],
-        camera_source=os.environ.get("ATIS_LIVE_CAMERA", "0"),
-        zones_path=display_path(zones_path),
-        zones_configured=zones_path.exists(),
-        db_logging=env_bool("ATIS_LIVE_DB_LOG", True),
-        analyze_interval=args.analyze_interval,
-        motion_threshold=args.motion_threshold,
-        unsafe_streak=args.unsafe_streak,
-        cooldown=int(args.cooldown),
-    )
-
-
-@app.route("/live/stream")
-def live_stream():
-    """
-    MJPEG stream endpoint for the live dashboard camera area.
-    """
-    if "user" not in session:
-        return redirect(url_for("login"))
-
-    return Response(
-        generate_live_frames(),
-        mimetype="multipart/x-mixed-replace; boundary=frame",
     )
 
 
