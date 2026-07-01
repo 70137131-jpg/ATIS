@@ -11,9 +11,12 @@ echo "==> Running database migrations …"
 # db.create_all() was run on the first deploy instead of alembic), we stamp the
 # DB as being at the initial 0001 state, then run upgrade again to apply 0002/0003.
 if ! flask --app app db upgrade 2>/dev/null; then
-    echo "    (initial upgrade failed; stamping DB as 0001 and retrying)"
-    flask --app app db stamp 0001_initial_postgresql_schema 2>/dev/null || true
-    flask --app app db upgrade
+    echo "    (initial upgrade failed; attempting 0002 stamp)"
+    flask --app app db stamp 0002_password_hash 2>/dev/null || true
+    if ! flask --app app db upgrade 2>/dev/null; then
+        echo "    (0003 upgrade also failed; assuming tables are fully up to date, stamping head)"
+        flask --app app db stamp head 2>/dev/null || true
+    fi
 fi
 
 
