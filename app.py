@@ -71,6 +71,24 @@ if Config.IS_PRODUCTION:
 
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
+# Optional error tracking. Dormant unless SENTRY_DSN is set, and degrades quietly
+# if the SDK isn't installed — so it never affects local dev or the demo.
+_sentry_dsn = os.environ.get("SENTRY_DSN")
+if _sentry_dsn:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.flask import FlaskIntegration
+
+        sentry_sdk.init(
+            dsn=_sentry_dsn,
+            integrations=[FlaskIntegration()],
+            environment=Config.ENV_NAME,
+            traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0")),
+        )
+        app.logger.info("Sentry error tracking enabled (%s).", Config.ENV_NAME)
+    except Exception as exc:  # noqa: BLE001 - never let telemetry break startup
+        app.logger.warning("Sentry init skipped: %s", exc)
+
 # Upload configuration
 UPLOAD_FOLDER = os.path.join(app.static_folder, "uploads")
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "webp"}

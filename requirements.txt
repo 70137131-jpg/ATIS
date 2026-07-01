@@ -13,3 +13,4 @@ Pillow>=10.0
 imagehash>=4.3
 reportlab>=4.0
 gunicorn>=21.0
+sentry-sdk[flask]>=2.0
