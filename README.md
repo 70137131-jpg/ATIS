@@ -1,3 +1,16 @@
+---
+title: ATIS Tyre Inspection
+emoji: 🛞
+colorFrom: green
+colorTo: gray
+sdk: docker
+app_port: 8080
+pinned: false
+---
+
+<!-- The YAML block above is Hugging Face Space metadata (Docker SDK): ignored on
+     GitHub, required by HF Spaces to build and route the container on port 8080. -->
+
 # Drive IQ / ATIS
 
 Automated Tire Inspection System (ATIS) now combines the trained YOLO tire

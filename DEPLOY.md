@@ -71,3 +71,34 @@ model loads once and is shared copy-on-write).
 - `instance/atis.db` (SQLite) and `static/uploads/*` are ephemeral inside a
   container — lost on redeploy. For real deployments, point `DATABASE_URL` at
   managed Postgres and move uploads to object storage (e.g. S3/R2/Supabase).
+
+## Deploy to Hugging Face Spaces (Docker) — recommended for the demo
+
+HF Spaces builds the Dockerfile for you, has Git LFS native (weights just work),
+and the free CPU tier has 16 GB RAM (torch fits easily). The `README.md`
+frontmatter (`sdk: docker`, `app_port: 8080`) tells HF how to build/route it.
+
+1. Create a free account at https://huggingface.co, then **New Space** →
+   SDK **Docker** → choose blank/empty template. Note the git URL:
+   `https://huggingface.co/spaces/<user>/<space>`.
+2. Push this repo to the Space (Git LFS uploads the weights automatically):
+   ```bash
+   git remote add space https://huggingface.co/spaces/<user>/<space>
+   git push space main:main
+   ```
+   Authenticate with an HF **access token** (Settings → Access Tokens, "write").
+3. In the Space UI → **Settings → Variables and secrets**, set:
+   | Name | Kind | Value |
+   |------|------|-------|
+   | `SECRET_KEY` | secret | a long random string (`python3 -c 'import secrets;print(secrets.token_hex(32))'`) |
+   | `ATIS_ENV` | variable | `production` |
+   | `ATIS_SEED_DEMO` | variable | `1`  ← seeds demo users so `admin@atis.com/admin123` works |
+4. The Space builds, then serves the full dashboard at
+   `https://<user>-<space>.hf.space`. Log in with `admin@atis.com` / `admin123`.
+
+Notes:
+- **Data is ephemeral** on the free tier (SQLite + uploads reset when the Space
+  rebuilds/restarts). Fine for a demo; add Neon Postgres via `DATABASE_URL` for
+  persistence.
+- **Live camera does not work in the cloud** — the Space has no webcam. Run the
+  live-feed demo locally; the cloud Space handles image-upload inspection.
