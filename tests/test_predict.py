@@ -76,6 +76,41 @@ def test_media_route_serves_stored_image(auth_client, app, monkeypatch, tmp_path
     assert len(img.data) > 0
 
 
+def test_live_capture_is_stored_and_rendered_on_dashboard(auth_client, app, monkeypatch, tmp_path):
+    monkeypatch.setattr(atis_app, "UPLOAD_FOLDER", str(tmp_path))
+    monkeypatch.setattr(
+        atis_app,
+        "classify_tyre_image",
+        lambda *_a, **_k: _fake_prediction("safe", []),
+    )
+
+    resp = auth_client.post(
+        "/predict",
+        data={
+            "image": (make_jpeg(), "live_capture.jpg"),
+            "location": "Live Camera",
+            "camera": "LIVE-CAM",
+        },
+        content_type="multipart/form-data",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["dashboard_url"] == "/dashboard"
+
+    with app.app_context():
+        insp = db.session.get(Inspection, body["inspection_id"])
+        assert insp.location == "Live Camera"
+        assert insp.camera == "LIVE-CAM"
+        assert insp.image_data is not None and len(insp.image_data) > 0
+
+    dashboard = auth_client.get("/dashboard")
+    assert dashboard.status_code == 200
+    assert b"Live Camera" in dashboard.data
+    assert b"LIVE-CAM" in dashboard.data
+    assert f"/media/inspection/{body['inspection_id']}".encode() in dashboard.data
+
+
 def test_live_analyze_classifies_a_frame(auth_client, app, monkeypatch):
     """The browser-camera endpoint decodes a posted JPEG and returns a result."""
     monkeypatch.setattr(

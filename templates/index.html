@@ -329,6 +329,7 @@
                         <table class="inspection-table">
                             <thead>
                                 <tr>
+                                    <th>Image</th>
                                     <th>Time</th>
                                     <th>License Plate</th>
                                     <th>Location</th>
@@ -341,6 +342,18 @@
                                 <!-- Loop through inspections passed from Flask -->
                                 {% for i in inspections %}
                                 <tr>
+                                    <td class="cell-image">
+                                        {% if i.image_data or i.image_path %}
+                                        <a href="{{ url_for('inspection_detail', inspection_id=i.id) }}"
+                                            class="inspection-thumb-link" aria-label="View inspection {{ i.id }}">
+                                            <img src="{{ url_for('inspection_image', inspection_id=i.id) }}"
+                                                alt="Inspection {{ i.id }} captured frame" class="inspection-thumb">
+                                        </a>
+                                        {% else %}
+                                        <span class="inspection-thumb-placeholder">—</span>
+                                        {% endif %}
+                                    </td>
+
                                     <td class="cell-time">
                                         <span class="time-main">{{ i.timestamp.strftime('%I:%M:%S %p') }}</span>
                                         <span class="time-sub">{{ i.timestamp.strftime('%b %d') }}</span>
@@ -373,7 +386,7 @@
                                 </tr>
                                 {% else %}
                                 <tr>
-                                    <td colspan="6">
+                                    <td colspan="7">
                                         <div class="empty-state">
                                             <svg width="34" height="34" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round"

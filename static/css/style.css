@@ -767,6 +767,40 @@ body.sidebar-collapsed .sidebar-collapse svg {
 }
 
 /* Specific Cell Styles */
+.inspection-table .cell-image {
+    width: 72px;
+    padding-right: 0.5rem;
+}
+
+.inspection-thumb-link {
+    display: block;
+    width: 58px;
+    height: 42px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #06130e;
+}
+
+.inspection-thumb {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.inspection-thumb-placeholder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 42px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    background: var(--off-white);
+}
+
 .inspection-table .cell-time {
     white-space: nowrap;
     line-height: 1.5;

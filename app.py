@@ -719,6 +719,7 @@ def predict():
             "model_path": model_path,
             "image_url": url_for("inspection_image", inspection_id=inspection.id),
             "detail_url": url_for("inspection_detail", inspection_id=inspection.id),
+            "dashboard_url": url_for("dashboard"),
         })
 
     flash(

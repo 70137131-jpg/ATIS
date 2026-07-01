@@ -300,7 +300,7 @@
           .then(function (data) {
               if (data && data.inspection_id) {
                   showCapture("Logged inspection #" + data.inspection_id +
-                      " (" + (data.status || "") + ")", data.detail_url || "");
+                      " (" + (data.status || "") + ")", data.dashboard_url || data.detail_url || "");
               } else {
                   showCapture("Could not log inspection.", "");
               }
@@ -316,7 +316,7 @@
             captureStatus.innerHTML = "";
             captureStatus.appendChild(document.createTextNode(message + " "));
             var a = document.createElement("a");
-            a.href = link; a.textContent = "View";
+            a.href = link; a.textContent = "View Dashboard";
             captureStatus.appendChild(a);
         } else {
             captureStatus.textContent = message;
