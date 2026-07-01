@@ -706,6 +706,25 @@ def inspection_detail(inspection_id):
     )
 
 
+@app.route("/media/inspection/<int:inspection_id>")
+def inspection_image(inspection_id):
+    """Serve an inspection's tire image.
+
+    Prefers the durable copy stored in the DB (survives container rebuilds), and
+    falls back to the on-disk file for older/local records. Behind login."""
+    if "user" not in session:
+        return redirect(url_for("login"))
+
+    insp = Inspection.query.get_or_404(inspection_id)
+    if insp.image_data:
+        return Response(insp.image_data, mimetype=insp.image_mime or "image/jpeg")
+    if insp.image_path:
+        disk_path = os.path.join(app.static_folder, insp.image_path)
+        if os.path.exists(disk_path):
+            return send_file(disk_path)
+    return Response("Image not found", status=404)
+
+
 @app.route("/inspect")
 def new_inspection():
     """
@@ -813,8 +832,17 @@ def predict():
         flash("Uploaded file is not a valid image.", "error")
         return redirect(url_for("new_inspection"))
 
-    # Relative path for storing in DB and serving via static files
+    # Relative path (filename hint + local-dev fallback for serving via static).
     image_rel_path = f"uploads/{unique_name}"
+
+    # Read the verified bytes so the image can be stored durably in the DB and
+    # survive ephemeral container filesystems (served via /media/inspection/<id>).
+    try:
+        with open(save_path, "rb") as _fh:
+            image_bytes = _fh.read()
+    except OSError:
+        image_bytes = None
+    image_mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
 
     # --- 3. Get form metadata ---
     plate = request.form.get("plate", "").strip() or None
@@ -848,6 +876,8 @@ def predict():
         confidence=confidence,
         defects=defects_str,
         image_path=image_rel_path,
+        image_data=image_bytes,
+        image_mime=image_mime if image_bytes else None,
     )
     db.session.add(inspection)
     db.session.flush()  # Get the ID
@@ -872,7 +902,7 @@ def predict():
             "bounding_boxes": bounding_boxes,
             "predicted_class": predicted_class,
             "model_path": model_path,
-            "image_url": url_for("static", filename=image_rel_path),
+            "image_url": url_for("inspection_image", inspection_id=inspection.id),
             "detail_url": url_for("inspection_detail", inspection_id=inspection.id),
         })
 

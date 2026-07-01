@@ -63,6 +63,11 @@ class Inspection(db.Model):
     confidence = db.Column(db.Integer, nullable=False)       # AI confidence score (0-100)
     defects = db.Column(db.String(300), nullable=True)       # String list of defects, e.g. "Tread,Sidewall"
     image_path = db.Column(db.String(300), nullable=True)    # Path to uploaded tire image (relative to static/)
+    # Durable image storage: the raw bytes live in the DB so uploads survive
+    # ephemeral container filesystems (e.g. Hugging Face Spaces rebuilds). Served
+    # via /media/inspection/<id>; image_path is kept as a filename/fallback hint.
+    image_data = db.Column(db.LargeBinary, nullable=True)
+    image_mime = db.Column(db.String(50), nullable=True)
 
     # Relationship: One inspection can have many alerts
     alerts = db.relationship("Alert", backref="inspection", lazy=True)
