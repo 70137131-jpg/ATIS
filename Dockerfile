@@ -44,6 +44,9 @@ RUN MODEL="runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weights/be
 
 EXPOSE 8080
 
-# Production WSGI server. SECRET_KEY must be supplied at runtime or the app
-# refuses to start (ATIS_ENV=production). See gunicorn.conf.py for tuning.
-CMD ["gunicorn", "--config", "gunicorn.conf.py", "app:app"]
+# Production startup: run migrations, optionally create admin, then start gunicorn.
+# Set ATIS_ADMIN_EMAIL + ATIS_ADMIN_PASSWORD env vars on first deploy to auto-create
+# an admin user. SECRET_KEY must be supplied at runtime or the app refuses to start.
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
+CMD ["./entrypoint.sh"]

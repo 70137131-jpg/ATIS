@@ -99,6 +99,13 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "webp"}
 db.init_app(app)
 migrate = Migrate(app, db)
 
+# Ensure all tables exist on boot. This is a no-op when the schema is already in
+# place, but creates them on a fresh database (first deploy) so the app doesn't
+# crash on the very first DB query.  For production deployments with managed
+# migrations prefer `flask db upgrade`; this is the safety net.
+with app.app_context():
+    db.create_all()
+
 # CSRF protection for all state-changing form posts.
 csrf = CSRFProtect(app)
 
