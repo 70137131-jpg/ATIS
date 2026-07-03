@@ -1,3 +1,4 @@
 # Development / CI dependencies (not needed at runtime, kept out of the image).
 -r requirements.txt
 pytest>=8.0
+pytest-cov>=5.0

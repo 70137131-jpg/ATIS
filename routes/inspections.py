@@ -329,8 +329,11 @@ def inspection_image(inspection_id):
     if image_bytes:
         return Response(image_bytes, mimetype=image_mime or "image/jpeg")
     if insp.image_path:
-        disk_path = os.path.join(current_app.static_folder, insp.image_path)
-        if os.path.exists(disk_path):
+        # image_path is app-written (uuid names), but contain it to static/
+        # anyway so a corrupted/tampered DB row can never read outside it.
+        static_root = os.path.realpath(current_app.static_folder)
+        disk_path = os.path.realpath(os.path.join(static_root, insp.image_path))
+        if disk_path.startswith(static_root + os.sep) and os.path.exists(disk_path):
             return send_file(disk_path)
     return Response("Image not found", status=404)
 

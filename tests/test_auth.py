@@ -16,6 +16,35 @@ def _auth_as(client, app, email, role):
         sess["role"] = role
 
 
+def test_demo_seed_refuses_weak_passwords_in_production(app, monkeypatch):
+    """The README-documented demo passwords must never seed on a prod host."""
+    from app import ensure_demo_users
+
+    monkeypatch.delenv("ATIS_DEMO_PASSWORD", raising=False)
+    app.config["IS_PRODUCTION"] = True
+    try:
+        before = User.query.count()
+        ensure_demo_users()
+        assert User.query.count() == before
+    finally:
+        app.config["IS_PRODUCTION"] = False
+
+
+def test_demo_seed_uses_override_password_in_production(app, monkeypatch):
+    from app import ensure_demo_users
+
+    monkeypatch.setenv("ATIS_DEMO_PASSWORD", "presentation-secret")
+    app.config["IS_PRODUCTION"] = True
+    try:
+        ensure_demo_users()
+        user = User.query.filter_by(email="operator@atis.com").first()
+        assert user is not None
+        assert user.check_password("presentation-secret")
+        assert not user.check_password("operator123")
+    finally:
+        app.config["IS_PRODUCTION"] = False
+
+
 def test_healthz_is_public(client):
     """The liveness probe must answer without a session (container health checks)."""
     resp = client.get("/healthz")

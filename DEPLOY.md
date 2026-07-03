@@ -152,9 +152,16 @@ frontmatter (`sdk: docker`, `app_port: 8080`) tells HF how to build/route it.
    |------|------|-------|
    | `SECRET_KEY` | secret | a long random string (`python3 -c 'import secrets;print(secrets.token_hex(32))'`) |
    | `ATIS_ENV` | variable | `production` |
-   | `ATIS_SEED_DEMO` | variable | `1`  ← seeds demo users, including `operator@nha.gov.pk/operator123` |
+   | `ATIS_SEED_DEMO` | variable | `1`  ← seeds the demo accounts |
+   | `ATIS_DEMO_PASSWORD` | **secret** | the password every demo account gets. **Required in production** — without it the app refuses to seed the well-known README passwords (they would be a public backdoor). |
 4. The Space builds, then serves the full dashboard at
-   `https://<user>-<space>.hf.space`. Log in with `admin@atis.com` / `admin123`.
+   `https://<user>-<space>.hf.space`. Log in with `admin@atis.com` and your
+   `ATIS_DEMO_PASSWORD`.
+
+   If an earlier deploy already created `admin@atis.com` with the old `admin123`
+   password (persistent DB), rotate it by setting `ATIS_ADMIN_EMAIL=admin@atis.com`
+   and `ATIS_ADMIN_PASSWORD=<new password>` — the entrypoint's `create-admin`
+   updates the existing user's password on boot.
 
 Notes:
 - **Data is ephemeral** on the free tier (SQLite + uploads reset when the Space

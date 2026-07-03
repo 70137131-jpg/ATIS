@@ -110,6 +110,20 @@ production). Provision the first production admin with
 `flask --app app create-admin`. Postgres relies on the Alembic migrations in
 `migrations/`.
 
+## Conventions
+
+- **Datetimes are naive-UTC by convention.** Columns are `db.DateTime` without
+  `timezone=True`; defaults call `datetime.now(timezone.utc)` and both SQLite and
+  Postgres `timestamp` store the value with the tzinfo dropped. Treat every stored
+  datetime as UTC. Do NOT flip columns to `timezone=True` piecemeal — it changes
+  SQLite string storage and Postgres comparisons at once, so it must be done as a
+  single dedicated migration + code sweep.
+- **Legacy string columns** (`Inspection.location`, `.camera`, `.defects`) are a
+  write-through cache kept for old rows/reports; the structured versions
+  (`location_id`, `camera_id`, `InspectionDefect`) are authoritative for new
+  writes. Planned deprecation: stop reading the strings first, then drop columns
+  in a later migration.
+
 ## Gotchas
 
 - **Demo login aliases:** the README advertises `*@nha.gov.pk` accounts, but the

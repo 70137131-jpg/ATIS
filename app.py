@@ -79,13 +79,8 @@ DEMO_USER_CREDENTIALS = [
     ("inspector@atis.com", "inspect123", "Inspector"),
 ]
 
+# Kept as a module global for live_video_inspection.py; routes read app.config.
 UPLOAD_FOLDER = None
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "webp"}
-MAX_IMAGE_PIXELS = None
-LIVE_FRAME_MAX_BYTES = None
-LIVE_FRAME_MAX_PIXELS = None
-REPORT_EXPORT_MAX_ROWS = None
-REPORT_MAX_DAYS = None
 
 csrf = CSRFProtect()
 limiter = None
@@ -93,13 +88,28 @@ migrate = None
 
 
 def ensure_demo_users():
-    """Create missing demo accounts without overwriting existing passwords."""
+    """Create missing demo accounts without overwriting existing passwords.
+
+    The demo passwords are printed in the README, so seeding them verbatim on a
+    public production host would be a documented backdoor. In production this
+    therefore requires ATIS_DEMO_PASSWORD and gives every demo account that
+    password instead of the well-known ones.
+    """
+    override = os.environ.get("ATIS_DEMO_PASSWORD")
+    if current_app.config["IS_PRODUCTION"] and not override:
+        current_app.logger.warning(
+            "Refusing to seed demo users with well-known README passwords in "
+            "production. Set ATIS_DEMO_PASSWORD to seed demo accounts with a "
+            "password of your own, or use `flask create-admin`."
+        )
+        return
+
     created = 0
     for email, password, role in DEMO_USER_CREDENTIALS:
         if User.query.filter_by(email=email).first():
             continue
         user = User(email=email, role=role)
-        user.set_password(password)
+        user.set_password(override or password)
         db.session.add(user)
         created += 1
 
@@ -137,27 +147,22 @@ def warmup_model(fail_hard: bool = False, flask_app=None) -> bool:
 def _configure_runtime_settings(flask_app):
     """Populate app config values derived from environment and static paths."""
     global UPLOAD_FOLDER
-    global MAX_IMAGE_PIXELS
-    global LIVE_FRAME_MAX_BYTES
-    global LIVE_FRAME_MAX_PIXELS
-    global REPORT_EXPORT_MAX_ROWS
-    global REPORT_MAX_DAYS
 
     UPLOAD_FOLDER = os.path.join(flask_app.static_folder, "uploads")
-    MAX_IMAGE_PIXELS = int(os.environ.get("ATIS_MAX_IMAGE_PIXELS", "12000000"))
-    LIVE_FRAME_MAX_BYTES = int(
+    flask_app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+    flask_app.config["MAX_IMAGE_PIXELS"] = int(
+        os.environ.get("ATIS_MAX_IMAGE_PIXELS", "12000000")
+    )
+    flask_app.config["LIVE_FRAME_MAX_BYTES"] = int(
         float(os.environ.get("ATIS_LIVE_FRAME_MAX_MB", "2")) * 1024 * 1024
     )
-    LIVE_FRAME_MAX_PIXELS = int(os.environ.get("ATIS_LIVE_FRAME_MAX_PIXELS", "2073600"))
-    REPORT_EXPORT_MAX_ROWS = int(os.environ.get("ATIS_REPORT_EXPORT_MAX_ROWS", "1000"))
-    REPORT_MAX_DAYS = int(os.environ.get("ATIS_REPORT_MAX_DAYS", "366"))
-
-    flask_app.config["REPORT_EXPORT_MAX_ROWS"] = REPORT_EXPORT_MAX_ROWS
-    flask_app.config["REPORT_MAX_DAYS"] = REPORT_MAX_DAYS
-    flask_app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-    flask_app.config["MAX_IMAGE_PIXELS"] = MAX_IMAGE_PIXELS
-    flask_app.config["LIVE_FRAME_MAX_BYTES"] = LIVE_FRAME_MAX_BYTES
-    flask_app.config["LIVE_FRAME_MAX_PIXELS"] = LIVE_FRAME_MAX_PIXELS
+    flask_app.config["LIVE_FRAME_MAX_PIXELS"] = int(
+        os.environ.get("ATIS_LIVE_FRAME_MAX_PIXELS", "2073600")
+    )
+    flask_app.config["REPORT_EXPORT_MAX_ROWS"] = int(
+        os.environ.get("ATIS_REPORT_EXPORT_MAX_ROWS", "1000")
+    )
+    flask_app.config["REPORT_MAX_DAYS"] = int(os.environ.get("ATIS_REPORT_MAX_DAYS", "366"))
 
 
 def _configure_sentry(flask_app):
@@ -209,6 +214,16 @@ def create_app(config_object=Config, config_overrides=None):
         app=flask_app,
         storage_uri=flask_app.config["RATELIMIT_STORAGE_URI"],
     )
+    if (
+        flask_app.config["IS_PRODUCTION"]
+        and flask_app.config["RATELIMIT_STORAGE_URI"].startswith("memory")
+        and int(os.environ.get("WEB_CONCURRENCY", "1")) > 1
+    ):
+        flask_app.logger.warning(
+            "Rate limiting uses in-memory storage but WEB_CONCURRENCY > 1: each "
+            "gunicorn worker keeps its own counters, so effective limits are "
+            "multiplied. Point RATELIMIT_STORAGE_URI at Redis for shared limits."
+        )
 
     register_auth_routes(flask_app, limiter)
     register_alert_routes(flask_app)
@@ -353,11 +368,6 @@ def register_error_handlers(flask_app):
     def internal_error(e):
         """Show a custom 500 page for internal server errors."""
         return render_template("500.html"), 500
-
-
-def allowed_file(filename):
-    """Check if a filename has an allowed image extension."""
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 app = create_app()
