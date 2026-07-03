@@ -1,5 +1,20 @@
 """Authentication / access-control tests."""
 
+from models import User, db
+
+
+def _auth_as(client, app, email, role):
+    with app.app_context():
+        user = User(email=email, role=role)
+        user.set_password("password123")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+    with client.session_transaction() as sess:
+        sess["user_id"] = user_id
+        sess["user"] = email
+        sess["role"] = role
+
 
 def test_login_page_renders(client):
     resp = client.get("/login")
@@ -43,3 +58,62 @@ def test_logout_clears_session(auth_client):
     auth_client.get("/logout")
     after = auth_client.get("/dashboard", follow_redirects=False)
     assert after.status_code in (301, 302)
+
+
+def test_operator_cannot_access_reports_or_alert_management(client, app):
+    _auth_as(client, app, "operator@example.com", "Operator")
+
+    reports = client.get("/reports", follow_redirects=False)
+    alerts = client.get("/alerts", follow_redirects=False)
+
+    assert reports.status_code == 403
+    assert alerts.status_code == 403
+
+
+def test_supervisor_can_access_reports_and_alerts(client, app):
+    _auth_as(client, app, "supervisor@example.com", "Supervisor")
+
+    assert client.get("/reports").status_code == 200
+    assert client.get("/alerts").status_code == 200
+
+
+def test_inspector_can_access_inspection_tools(client, app):
+    _auth_as(client, app, "inspector@example.com", "Inspector")
+
+    assert client.get("/inspect").status_code == 200
+    assert client.get("/live").status_code == 200
+
+
+def test_report_api_denies_operator_with_json_403(client, app):
+    _auth_as(client, app, "operator-json@example.com", "Operator")
+
+    resp = client.get(
+        "/api/reports/safety-trend?from=2026-01-01&to=2026-01-02",
+        headers={"Accept": "application/json"},
+    )
+    assert resp.status_code == 403
+    assert resp.get_json()["error"] == "Forbidden"
+
+
+def test_operator_nav_hides_alerts_and_reports(client, app):
+    _auth_as(client, app, "operator-nav@example.com", "Operator")
+
+    resp = client.get("/dashboard")
+
+    assert resp.status_code == 200
+    assert b"/inspect" in resp.data
+    assert b"/live" in resp.data
+    assert b"/alerts" not in resp.data
+    assert b"/reports" not in resp.data
+
+
+def test_supervisor_nav_hides_inspection_tools(client, app):
+    _auth_as(client, app, "supervisor-nav@example.com", "Supervisor")
+
+    resp = client.get("/dashboard")
+
+    assert resp.status_code == 200
+    assert b"/alerts" in resp.data
+    assert b"/reports" in resp.data
+    assert b"/inspect" not in resp.data
+    assert b"/live" not in resp.data
