@@ -31,6 +31,13 @@ DEFAULT_MODEL_CANDIDATES = (
 DEFAULT_CONF_THRESHOLD = 0.60
 DEFAULT_OBJECT_CONF_THRESHOLD = 0.35
 
+# Flat-frame gate defaults: a frame whose grayscale std-dev (contrast) or Canny
+# edge-pixel fraction falls below these is rejected as "not a tyre" before the
+# classifier verdict is trusted. Tunable per site — a dark or hazy toll-booth
+# camera may need lower values to avoid rejecting genuine tyre frames.
+DEFAULT_FLAT_CONTRAST_MIN = 10.0
+DEFAULT_FLAT_EDGE_DENSITY_MIN = 0.003
+
 OBJECT_MODEL_CANDIDATES = (
     "yolo26n.pt",
 )
@@ -103,6 +110,30 @@ def get_object_conf_threshold() -> float:
         return DEFAULT_OBJECT_CONF_THRESHOLD
     if value > 1:
         value = value / 100
+    return min(max(value, 0.0), 1.0)
+
+
+def _env_float(name: str, default: float) -> float:
+    """Read a float environment variable, falling back on missing/invalid."""
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def get_flat_contrast_min() -> float:
+    """Grayscale std-dev below which a frame is rejected as blank/flat
+    (env ATIS_FLAT_CONTRAST_MIN)."""
+    return max(_env_float("ATIS_FLAT_CONTRAST_MIN", DEFAULT_FLAT_CONTRAST_MIN), 0.0)
+
+
+def get_flat_edge_density_min() -> float:
+    """Canny edge-pixel fraction below which a frame is rejected as featureless
+    (env ATIS_FLAT_EDGE_DENSITY_MIN)."""
+    value = _env_float("ATIS_FLAT_EDGE_DENSITY_MIN", DEFAULT_FLAT_EDGE_DENSITY_MIN)
     return min(max(value, 0.0), 1.0)
 
 
@@ -259,8 +290,13 @@ def _localize_cracks(model_input: Any, confidence: int, max_boxes: int = 2) -> l
         def _norm_box(x1: int, y1: int, x2: int, y2: int) -> dict[str, Any]:
             return {
                 "label": "Crack",
+                # The confidence is the *classifier's* verdict for the image;
+                # the box position comes from the classical-CV localizer.
+                # "source" makes that distinction visible to consumers so a
+                # heuristic box is never mistaken for a trained detection.
                 "confidence": int(confidence),
                 "severity": "High",
+                "source": "heuristic",
                 "bbox": [
                     round(float(x1) / w, 4), round(float(y1) / h, 4),
                     round(float(x2) / w, 4), round(float(y2) / h, 4),
@@ -312,7 +348,7 @@ def _flat_frame_reason(model_input: Any) -> str | None:
         edges = cv2.Canny(gray, 80, 160)
         edge_density = float(np.count_nonzero(edges)) / float(edges.size)
 
-        if contrast < 10 or edge_density < 0.003:
+        if contrast < get_flat_contrast_min() or edge_density < get_flat_edge_density_min():
             return "Not a tyre"
     except Exception:  # noqa: BLE001 - never let the gate break inference
         return None

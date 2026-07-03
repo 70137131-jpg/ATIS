@@ -146,7 +146,12 @@
             var color = box.status === "safe" ? "#22c55e" : "#ef4444";
             var width = Math.max(2, x2 - x1);
             var height = Math.max(2, y2 - y1);
-            var label = [box.label || box.predicted_class || "tire", box.confidence ? box.confidence + "%" : ""]
+            var label = [
+                box.label || box.predicted_class || "tire",
+                box.confidence ? box.confidence + "%" : "",
+                // Heuristic localizer boxes are estimates, not trained detections.
+                box.source === "heuristic" ? "(est.)" : "",
+            ]
                 .filter(Boolean)
                 .join(" ");
 

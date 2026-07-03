@@ -40,6 +40,8 @@
             ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
             var label = box.label || "";
             if (box.confidence !== undefined) label += " " + box.confidence + "%";
+            // Heuristic localizer boxes are estimates, not trained detections.
+            if (box.source === "heuristic") label += " (est.)";
             if (label) {
                 ctx.font = "600 12px Inter, sans-serif";
                 var lw = ctx.measureText(label).width + 12;

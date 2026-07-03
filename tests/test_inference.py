@@ -157,6 +157,38 @@ def test_blank_frame_is_reported_as_not_tyre(monkeypatch):
     assert result["defects"] == ["Not a tyre"]
 
 
+def test_flat_frame_thresholds_are_env_tunable(monkeypatch):
+    """Site operators can relax the flat-frame gate for dark/hazy cameras."""
+    blank = np.full((224, 224, 3), 255, dtype=np.uint8)
+
+    # Default thresholds reject a blank frame...
+    assert atis_inference._flat_frame_reason(blank) == "Not a tyre"
+
+    # ...but zeroed thresholds accept it (contrast 0 >= 0, density 0 >= 0).
+    monkeypatch.setenv("ATIS_FLAT_CONTRAST_MIN", "0")
+    monkeypatch.setenv("ATIS_FLAT_EDGE_DENSITY_MIN", "0")
+    assert atis_inference._flat_frame_reason(blank) is None
+
+    # Invalid values fall back to the defaults.
+    monkeypatch.setenv("ATIS_FLAT_CONTRAST_MIN", "not-a-number")
+    monkeypatch.setenv("ATIS_FLAT_EDGE_DENSITY_MIN", "")
+    assert atis_inference.get_flat_contrast_min() == atis_inference.DEFAULT_FLAT_CONTRAST_MIN
+    assert (
+        atis_inference.get_flat_edge_density_min()
+        == atis_inference.DEFAULT_FLAT_EDGE_DENSITY_MIN
+    )
+
+
+def test_localizer_boxes_are_marked_heuristic(monkeypatch):
+    """Every localizer box carries source=heuristic so consumers can tell it
+    apart from a trained detection."""
+    frame = np.random.default_rng(7).integers(0, 255, (128, 128, 3), dtype=np.uint8)
+    boxes = atis_inference._localize_cracks(frame, confidence=77)
+    assert boxes, "localizer should always return at least one box"
+    for box in boxes:
+        assert box["source"] == "heuristic"
+
+
 class _FakeList:
     def __init__(self, values):
         self._values = values
