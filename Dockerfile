@@ -17,11 +17,11 @@ WORKDIR /app
 
 # Install the CPU-only Torch build first so the multi-GB CUDA wheels are never
 # pulled (keeps the image far smaller). requirements.txt then sees torch and
-# torchvision already satisfied and skips them.
-RUN pip install --no-cache-dir torch torchvision \
+# torchvision already satisfied and skips them. constraints.txt pins the exact
+# versions so builds are reproducible.
+COPY requirements.txt constraints.txt ./
+RUN pip install --no-cache-dir -c constraints.txt torch torchvision \
     --index-url https://download.pytorch.org/whl/cpu
-
-COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application. .dockerignore keeps the multi-GB dataset and git

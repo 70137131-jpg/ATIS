@@ -27,6 +27,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             requirements.txt
+            constraints.txt
             requirements-dev.txt
       - name: Install system packages
         run: |
@@ -56,6 +57,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             requirements.txt
+            constraints.txt
             requirements-dev.txt
       - name: Install system packages
         run: |
