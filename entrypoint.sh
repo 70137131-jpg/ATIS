@@ -7,18 +7,12 @@
 set -e
 
 echo "==> Running database migrations …"
-# Try to upgrade. If it fails (e.g. relation "users" already exists because 
-# db.create_all() was run on the first deploy instead of alembic), we stamp the
-# DB as being at the initial 0001 state, then run upgrade again to apply 0002/0003.
-if ! flask --app app db upgrade 2>/dev/null; then
-    echo "    (initial upgrade failed; attempting 0002 stamp)"
-    flask --app app db stamp 0002_password_hash 2>/dev/null || true
-    if ! flask --app app db upgrade 2>/dev/null; then
-        echo "    (0003 upgrade also failed; assuming tables are fully up to date, stamping head)"
-        flask --app app db stamp head 2>/dev/null || true
-    fi
-fi
+flask --app app db upgrade
 
+if [ "$ATIS_SEED_DEMO" = "1" ] || [ "$ATIS_SEED_DEMO" = "true" ]; then
+    echo "==> Ensuring demo users exist …"
+    flask --app app seed-demo-users
+fi
 
 # Create a default admin if ATIS_ADMIN_EMAIL and ATIS_ADMIN_PASSWORD are set and
 # no admin exists yet.  This lets the first deploy be fully automated.

@@ -2,7 +2,7 @@ import os
 
 from atis_inference import classify_tyre_image, find_model_path
 
-def test_tyre_safety(image_path):
+def run_tyre_safety_check(image_path):
     """
     Runs inference using the trained ATIS classification model to predict tire safety.
     """
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     abs_image_path = os.path.abspath(SAMPLE_IMAGE)
     
     if os.path.exists(abs_image_path):
-        test_tyre_safety(abs_image_path)
+        run_tyre_safety_check(abs_image_path)
     else:
         print(f"Error: Could not find '{SAMPLE_IMAGE}' at location: {abs_image_path}")
         print("Please check the folder to make sure the file name and extension are exactly matching.")

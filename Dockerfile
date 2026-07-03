@@ -4,7 +4,7 @@ FROM python:3.12-slim
 # OpenCV (opencv-python) loads these shared libs on import even when the live
 # camera UI is unused; every other dependency ships as a manylinux wheel.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 curl \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 curl tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1 \
@@ -29,20 +29,27 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Fallback for deploy platforms where Git-LFS isn't pulled before build (e.g.
-# App Platform). If the model file is a Git-LFS pointer stub (~132 bytes),
-# we download the real file directly from GitHub's raw content endpoint.
-RUN for MODEL in \
-      "runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt" \
-      "yolo26n.pt"; do \
-      if [ ! -f "$MODEL" ]; then \
-        echo "ERROR: model weights not found: $MODEL"; exit 1; \
+# App Platform). The classifier is required; the COCO object model is optional
+# and only improves obvious non-tyre rejection.
+RUN CLASSIFIER="runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt"; \
+    if [ ! -f "$CLASSIFIER" ]; then \
+      echo "ERROR: classifier weights not found: $CLASSIFIER"; exit 1; \
+    fi; \
+    if head -c 64 "$CLASSIFIER" | grep -q "git-lfs"; then \
+      echo "WARNING: $CLASSIFIER is a Git-LFS pointer stub. Downloading real weights from GitHub..."; \
+      curl -L -o "$CLASSIFIER" "https://github.com/70137131-jpg/ATIS/raw/main/$CLASSIFIER" || exit 1; \
+    fi; \
+    echo "Classifier weights OK: $CLASSIFIER ($(wc -c < "$CLASSIFIER") bytes)"; \
+    OBJECT_MODEL="yolo26n.pt"; \
+    if [ -f "$OBJECT_MODEL" ]; then \
+      if head -c 64 "$OBJECT_MODEL" | grep -q "git-lfs"; then \
+        echo "WARNING: $OBJECT_MODEL is a Git-LFS pointer stub. Downloading real weights from GitHub..."; \
+        curl -L -o "$OBJECT_MODEL" "https://github.com/70137131-jpg/ATIS/raw/main/$OBJECT_MODEL" || true; \
       fi; \
-      if head -c 64 "$MODEL" | grep -q "git-lfs"; then \
-        echo "WARNING: $MODEL is a Git-LFS pointer stub. Downloading real weights from GitHub..."; \
-        curl -L -o "$MODEL" "https://github.com/70137131-jpg/ATIS/raw/main/$MODEL" || exit 1; \
-      fi; \
-      echo "Model weights OK: $MODEL ($(wc -c < "$MODEL") bytes)"; \
-    done
+      echo "Object-gate weights OK: $OBJECT_MODEL ($(wc -c < "$OBJECT_MODEL") bytes)"; \
+    else \
+      echo "WARNING: optional object-gate weights not found: $OBJECT_MODEL"; \
+    fi
 
 EXPOSE 8080
 

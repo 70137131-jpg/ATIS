@@ -1,4 +1,13 @@
-"""Shared ATIS classifier inference helpers."""
+"""Shared ATIS inference helpers: crack **classifier** + crack **localizer**.
+
+The trained model is a 2-class YOLOv11 classifier (``normal`` vs ``cracked``) that
+gives the safety verdict. When a tyre is classified as cracked, a lightweight
+classical-CV localizer (`_localize_cracks`) finds the crack region(s) in the image
+and returns a bounding box around them, so the dashboard/live-feed overlay draws a
+box **on the crack** rather than around the whole frame. The localizer is an
+image-processing heuristic (black-hat morphology highlights the dark, thin crack
+lines) — not a trained detector — so it needs no bounding-box training data.
+"""
 
 from __future__ import annotations
 
@@ -103,6 +112,12 @@ def tyre_gate_enabled() -> bool:
     return raw.strip().lower() not in {"0", "false", "no", "off", ""}
 
 
+def localize_enabled() -> bool:
+    """Return whether crack localization (box drawing) is enabled."""
+    raw = os.environ.get("ATIS_LOCALIZE", "1")
+    return raw.strip().lower() not in {"0", "false", "no", "off", ""}
+
+
 def find_object_model_path() -> Path | None:
     """Return the optional COCO detector used to reject obvious non-tyre frames."""
     env_path = os.environ.get("ATIS_OBJECT_MODEL_PATH")
@@ -167,11 +182,9 @@ def _status_for_class(
     it is 'normal'. ``confidence`` is the top-1 probability as a fraction (0-1)."""
     normalized = predicted_class.strip().lower()
 
-    # Defect classes are unsafe regardless of confidence — never gated.
+    # A cracked tire is unsafe regardless of confidence — never gated.
     if normalized in {"crack", "cracked", "cracking"}:
         return "unsafe", ["Cracking"]
-    if normalized in {"bulge", "bulged", "sidewall_bulge", "sidewall bulge"}:
-        return "unsafe", ["Bulge"]
 
     if normalized == "normal":
         if confidence >= threshold:
@@ -184,7 +197,7 @@ def _status_for_class(
 
 
 def _frame_array(model_input: Any) -> Any | None:
-    """Return an OpenCV/Numpy image array for quick non-tyre checks."""
+    """Return an OpenCV/Numpy image array (BGR) for the localizer / non-tyre checks."""
     try:
         import cv2
         import numpy as np
@@ -201,8 +214,85 @@ def _frame_array(model_input: Any) -> Any | None:
     return None
 
 
+def _localize_cracks(model_input: Any, confidence: int, max_boxes: int = 2) -> list[dict[str, Any]]:
+    """Find crack region(s) in the image and return normalized boxes focused on
+    them. Uses black-hat morphology to highlight the dark, thin crack lines, then
+    boxes the strongest elongated responses. Returns [] if localization is off or
+    the image can't be read; always returns at least one box (peak response) when
+    the tyre is cracked so the overlay points at the defect."""
+    if not localize_enabled():
+        return []
+
+    frame = _frame_array(model_input)
+    if frame is None:
+        return []
+
+    try:
+        import cv2
+        import numpy as np
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
+        h, w = gray.shape[:2]
+        if h == 0 or w == 0:
+            return []
+
+        gray = cv2.GaussianBlur(gray, (3, 3), 0)
+        eq = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+
+        # Black-hat: bright where there are dark, thin structures (cracks).
+        bh_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+        blackhat = cv2.morphologyEx(eq, cv2.MORPH_BLACKHAT, bh_kernel)
+
+        _, mask = cv2.threshold(blackhat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        close_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, close_kernel, iterations=2)
+
+        # Local crack density: the average crack-pixel fraction inside a moderate
+        # window centered at each pixel. The densest windows are where cracking
+        # concentrates, so boxing them keeps the box focused on the crack(s) —
+        # tight on a lone crack, and on the worst area when cracking is widespread.
+        maskf = (mask > 0).astype(np.float32)
+        win_w = max(16, int(w * 0.30))
+        win_h = max(16, int(h * 0.30))
+        density = cv2.boxFilter(maskf, ddepth=-1, ksize=(win_w, win_h), normalize=True)
+
+        def _norm_box(x1: int, y1: int, x2: int, y2: int) -> dict[str, Any]:
+            return {
+                "label": "Crack",
+                "confidence": int(confidence),
+                "severity": "High",
+                "bbox": [
+                    round(float(x1) / w, 4), round(float(y1) / h, 4),
+                    round(float(x2) / w, 4), round(float(y2) / h, 4),
+                ],
+            }
+
+        boxes: list[dict[str, Any]] = []
+        for _ in range(max_boxes):
+            _minv, maxv, _minl, (cx, cy) = cv2.minMaxLoc(density)
+            if maxv < 0.03:  # too little crack density here to call it a defect
+                break
+            x1, y1 = max(0, cx - win_w // 2), max(0, cy - win_h // 2)
+            x2, y2 = min(w, cx + win_w // 2), min(h, cy + win_h // 2)
+            boxes.append(_norm_box(x1, y1, x2, y2))
+            # Suppress this window so the next pick is a different crack cluster.
+            density[max(0, cy - win_h):min(h, cy + win_h),
+                    max(0, cx - win_w):min(w, cx + win_w)] = 0.0
+
+        # Fallback: cracked class but no dense region → point a focused box at the
+        # single strongest crack response so the overlay still marks the defect.
+        if not boxes:
+            _minv, _maxv, _minl, (px, py) = cv2.minMaxLoc(blackhat)
+            bw, bh = max(12, int(w * 0.20)), max(12, int(h * 0.20))
+            x1, y1 = max(0, px - bw // 2), max(0, py - bh // 2)
+            boxes = [_norm_box(x1, y1, min(w, x1 + bw), min(h, y1 + bh))]
+        return boxes
+    except Exception:  # noqa: BLE001 - localization is best-effort, never fatal
+        return []
+
+
 def _flat_frame_reason(model_input: Any) -> str | None:
-    """Reject blank/flat frames that the 2-class classifier otherwise over-passes."""
+    """Reject blank/flat frames that the classifier otherwise over-passes."""
     frame = _frame_array(model_input)
     if frame is None:
         return None
@@ -284,8 +374,8 @@ def _not_tyre_result(reason: str, *, model_path: str = "") -> dict[str, Any]:
         "predicted_class": "not_tyre",
         "threshold": round(get_conf_threshold() * 100),
         "low_confidence": False,
-        "prob_normal": 0,
-        "prob_cracked": 0,
+        "boxes": [],
+        "bounding_boxes": [],
         "model_path": model_path,
     }
 
@@ -308,32 +398,29 @@ def _classify_model_input(
     predicted_class = _class_name(result.names, class_id)
     threshold = get_conf_threshold()
     status, defects = _status_for_class(predicted_class, conf_fraction, threshold)
+    confidence = max(0, min(100, int(round(conf_fraction * 100))))
+    resolved_model = str(_classifier_path or find_model_path() or "")
 
-    # Full per-class probabilities for transparency/audit (e.g. operator review).
-    prob_vector = result.probs.data.tolist()
-    class_probs = {
-        _class_name(result.names, i).strip().lower(): float(prob_vector[i])
-        for i in range(len(prob_vector))
-    }
-
+    # A confident 'safe' still gets a non-tyre sanity check.
     if status == "safe":
         reason = _non_tyre_reason(model_input)
         if reason:
-            return _not_tyre_result(
-                reason,
-                model_path=str(_classifier_path or find_model_path() or ""),
-            )
+            return _not_tyre_result(reason, model_path=resolved_model)
+
+    # Localize the crack so the overlay box lands on the defect, not the frame.
+    is_cracked = predicted_class.strip().lower() in {"crack", "cracked", "cracking"}
+    boxes = _localize_cracks(model_input, confidence) if is_cracked else []
 
     return {
         "status": status,
-        "confidence": max(0, min(100, int(round(conf_fraction * 100)))),
+        "confidence": confidence,
         "defects": defects,
         "predicted_class": predicted_class,
         "threshold": round(threshold * 100),
         "low_confidence": status == "unsafe" and predicted_class.strip().lower() == "normal",
-        "prob_normal": round(class_probs.get("normal", 0.0) * 100),
-        "prob_cracked": round(class_probs.get("cracked", 0.0) * 100),
-        "model_path": str(_classifier_path or find_model_path() or ""),
+        "boxes": boxes,
+        "bounding_boxes": boxes,
+        "model_path": resolved_model,
     }
 
 
@@ -341,7 +428,7 @@ def classify_tyre_image(
     image_path: str | os.PathLike[str],
     model_path: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
-    """Classify a tire image path and return normalized ATIS inspection fields."""
+    """Classify a tire image path and localize any crack; returns ATIS fields."""
     return _classify_model_input(str(image_path), model_path)
 
 
@@ -349,5 +436,5 @@ def classify_tyre_frame(
     frame: Any,
     model_path: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
-    """Classify an in-memory OpenCV/Numpy frame or crop."""
+    """Classify an in-memory OpenCV/Numpy frame or crop and localize any crack."""
     return _classify_model_input(frame, model_path)
