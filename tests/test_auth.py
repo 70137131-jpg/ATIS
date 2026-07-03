@@ -16,6 +16,13 @@ def _auth_as(client, app, email, role):
         sess["role"] = role
 
 
+def test_healthz_is_public(client):
+    """The liveness probe must answer without a session (container health checks)."""
+    resp = client.get("/healthz")
+    assert resp.status_code == 200
+    assert resp.get_json() == {"status": "ok"}
+
+
 def test_login_page_renders(client):
     resp = client.get("/login")
     assert resp.status_code == 200

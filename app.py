@@ -218,6 +218,7 @@ def create_app(config_object=Config, config_overrides=None):
     register_report_routes(flask_app)
     register_user_routes(flask_app)
 
+    register_health_endpoint(flask_app)
     register_context_processors(flask_app)
     register_request_hooks(flask_app)
     register_cli(flask_app)
@@ -254,7 +255,19 @@ def register_context_processors(flask_app):
         }
 
 
-PUBLIC_ENDPOINTS = {"login", "static"}
+PUBLIC_ENDPOINTS = {"login", "static", "healthz"}
+
+
+def register_health_endpoint(flask_app):
+    @flask_app.get("/healthz")
+    def healthz():
+        """Unauthenticated liveness probe for container/platform health checks.
+
+        Deliberately cheap (no DB, no model): it answers "is the web process
+        serving requests", so an outage of a dependency doesn't put the
+        container into a restart loop that can't fix it.
+        """
+        return jsonify({"status": "ok"}), 200
 
 
 def register_request_hooks(flask_app):

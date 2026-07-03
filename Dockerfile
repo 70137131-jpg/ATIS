@@ -30,7 +30,11 @@ COPY . .
 
 # Fallback for deploy platforms where Git-LFS isn't pulled before build (e.g.
 # App Platform). The classifier is required; the COCO object model is optional
-# and only improves obvious non-tyre rejection.
+# and only improves obvious non-tyre rejection. Every artifact — whether it came
+# from the build context or the fallback download — must match its pinned
+# SHA256, so a tampered or corrupted model can never ship.
+ENV ATIS_CLASSIFIER_SHA256=8d27d1de6823436fa29ff5c3082276b96d9dc37eee5e3af5ac1f3c8e8bfba5e0 \
+    ATIS_OBJECT_MODEL_SHA256=9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef
 RUN CLASSIFIER="runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt"; \
     if [ ! -f "$CLASSIFIER" ]; then \
       echo "ERROR: classifier weights not found: $CLASSIFIER"; exit 1; \
@@ -39,6 +43,8 @@ RUN CLASSIFIER="runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weigh
       echo "WARNING: $CLASSIFIER is a Git-LFS pointer stub. Downloading real weights from GitHub..."; \
       curl -L -o "$CLASSIFIER" "https://github.com/70137131-jpg/ATIS/raw/main/$CLASSIFIER" || exit 1; \
     fi; \
+    echo "$ATIS_CLASSIFIER_SHA256  $CLASSIFIER" | sha256sum -c - \
+      || { echo "ERROR: classifier weights failed SHA256 verification."; exit 1; }; \
     echo "Classifier weights OK: $CLASSIFIER ($(wc -c < "$CLASSIFIER") bytes)"; \
     OBJECT_MODEL="yolo26n.pt"; \
     if [ -f "$OBJECT_MODEL" ]; then \
@@ -46,16 +52,36 @@ RUN CLASSIFIER="runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weigh
         echo "WARNING: $OBJECT_MODEL is a Git-LFS pointer stub. Downloading real weights from GitHub..."; \
         curl -L -o "$OBJECT_MODEL" "https://github.com/70137131-jpg/ATIS/raw/main/$OBJECT_MODEL" || true; \
       fi; \
-      echo "Object-gate weights OK: $OBJECT_MODEL ($(wc -c < "$OBJECT_MODEL") bytes)"; \
+      if echo "$ATIS_OBJECT_MODEL_SHA256  $OBJECT_MODEL" | sha256sum -c -; then \
+        echo "Object-gate weights OK: $OBJECT_MODEL ($(wc -c < "$OBJECT_MODEL") bytes)"; \
+      else \
+        echo "WARNING: $OBJECT_MODEL failed SHA256 verification — removing it."; \
+        echo "WARNING: the optional non-tyre object gate will be disabled in this image."; \
+        rm -f "$OBJECT_MODEL"; \
+      fi; \
     else \
       echo "WARNING: optional object-gate weights not found: $OBJECT_MODEL"; \
     fi
 
+# Run as a dedicated non-root user. Only the runtime-writable paths are chowned:
+# instance/ (SQLite fallback) and static/uploads/ (legacy upload path).
+RUN useradd --create-home --uid 1000 atis \
+    && mkdir -p /app/instance /app/static/uploads \
+    && chmod +x /app/entrypoint.sh \
+    && chown -R atis:atis /app
+USER atis
+ENV YOLO_CONFIG_DIR=/tmp/Ultralytics \
+    MPLCONFIGDIR=/tmp/matplotlib
+
 EXPOSE 8080
+
+# Container-level liveness probe against the unauthenticated /healthz endpoint.
+# start-period covers model warmup + migrations on slow 1 GB instances.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+  CMD curl -fsS "http://127.0.0.1:${PORT:-8080}/healthz" || exit 1
 
 # Production startup: run migrations, optionally create admin, then start gunicorn.
 # Set ATIS_ADMIN_EMAIL + ATIS_ADMIN_PASSWORD env vars on first deploy to auto-create
 # an admin user. SECRET_KEY must be supplied at runtime or the app refuses to start.
-COPY entrypoint.sh .
-RUN chmod +x entrypoint.sh
+# entrypoint.sh ships via `COPY . .` above and is chmod'd during user setup.
 CMD ["./entrypoint.sh"]
