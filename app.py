@@ -26,13 +26,14 @@ from flask import (
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
+from sqlalchemy.orm import joinedload
 
 from atis_inference import (
     find_model_path,
     load_classifier,
 )
 from config import Config
-from models import Alert, Inspection, User, db
+from models import Alert, User, db
 from routes.alerts import register_routes as register_alert_routes
 from routes.audit import register_routes as register_audit_routes
 from routes.auth import register_routes as register_auth_routes
@@ -233,25 +234,40 @@ def create_app(config_object=Config, config_overrides=None):
 def register_context_processors(flask_app):
     @flask_app.context_processor
     def inject_nha_status():
-        """Expose common NHA header counts and session info to all templates."""
-        if "user" not in session:
+        """Expose common NHA header counts and session info to all templates.
+
+        Permissions come from ``g.current_user`` (loaded fresh from the DB by
+        the before_request hook), not the session snapshot, so role changes and
+        deactivations take effect on the next request. The alert queries are
+        memoized on ``g`` so multi-render requests (e.g. error pages) pay for
+        them once, and ``joinedload`` populates ``alert.inspection`` up front —
+        previously each of the 5 dropdown rows lazy-loaded its inspection.
+        """
+        user = getattr(g, "current_user", None)
+        if user is None:
             return {}
+        cached = getattr(g, "_nha_status_cache", None)
+        if cached is None:
+            cached = {
+                "pending_alert_count": Alert.query.filter_by(status="pending").count(),
+                "recent_alerts": (
+                    Alert.query
+                    .options(joinedload(Alert.inspection))
+                    .order_by(Alert.created_at.desc())
+                    .limit(5)
+                    .all()
+                ),
+            }
+            g._nha_status_cache = cached
         return {
-            "pending_alert_count": Alert.query.filter_by(status="pending").count(),
-            "current_user": session.get("user", ""),
-            "current_role": session.get("role", ""),
-            "can_manage_alerts": session.get("role") in ALERT_MANAGER_ROLES,
-            "can_view_reports": session.get("role") in REPORT_VIEWER_ROLES,
-            "can_run_inspections": session.get("role") in INSPECTION_OPERATOR_ROLES,
-            "can_review_inspections": session.get("role") in INSPECTION_REVIEWER_ROLES,
-            "can_manage_users": session.get("role") in ADMIN_ROLES,
-            "recent_alerts": (
-                Alert.query
-                .join(Inspection)
-                .order_by(Alert.created_at.desc())
-                .limit(5)
-                .all()
-            ),
+            **cached,
+            "current_user": user.email,
+            "current_role": user.role,
+            "can_manage_alerts": user.role in ALERT_MANAGER_ROLES,
+            "can_view_reports": user.role in REPORT_VIEWER_ROLES,
+            "can_run_inspections": user.role in INSPECTION_OPERATOR_ROLES,
+            "can_review_inspections": user.role in INSPECTION_REVIEWER_ROLES,
+            "can_manage_users": user.role in ADMIN_ROLES,
         }
 
 
