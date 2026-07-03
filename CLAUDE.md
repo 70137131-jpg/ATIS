@@ -15,7 +15,7 @@ alerts on unsafe results, and produces charts and PDF reports.
 ```bash
 # Setup
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 # Run the dashboard (debug server on http://127.0.0.1:5000)
 python3 app.py
@@ -37,10 +37,15 @@ cp .env.example .env            # set DATABASE_URL=postgresql+psycopg2://...
 python3 -m flask --app app db upgrade
 python3 migrate_sqlite_to_postgres.py            # copy SQLite rows into Postgres
 python3 migrate_sqlite_to_postgres.py --replace  # only to overwrite existing Postgres rows
+
+# Tests
+python3 -m pytest
+
+# Docker smoke build
+docker build -t atis .
 ```
 
-There is no test runner or linter configured — `test_tyre.py` is a CLI demo
-script, not a unit test.
+`test_tyre.py` is a CLI demo script, not a pytest test module.
 
 ## Architecture
 
@@ -59,26 +64,27 @@ unexpected class is also `unsafe`**. The returned dict includes `threshold` and
 a `low_confidence` flag for transparency. Note the model is a 2-class softmax, so
 the winning confidence is always ≥ 0.50 — a threshold only bites above that.
 
-**[app.py](app.py) is a single-file Flask app** holding all routes, config, and
-helpers. Key flows:
+**[app.py](app.py) owns the Flask app factory** (`create_app`) and extension
+initialization. Routes are split under `routes/`, with shared decorators and
+context helpers in `routes/common.py`. Key flows:
 - `/predict` (file upload) and `/api/live/analyze` (browser camera frames) both
-  funnel through `create_inspection_record()`, which writes an `Inspection` and,
+  funnel through `services.inspections.create_inspection_record()`, which writes
+  an `Inspection`, records `created_by_id`, stores upload metadata/checksum, and
   **when status is `unsafe`, auto-creates a pending `Alert`** in the same
   transaction.
-- The `/api/reports/*` endpoints aggregate inspections by date range in Python
-  (using `Counter`) for charts; `/api/reports/export-pdf` builds a landscape PDF
-  with reportlab.
+- The `/api/reports/*` endpoints live in `routes/reports.py`; aggregation helpers
+  live in `services/reports.py`, and `/api/reports/export-pdf` builds a landscape
+  PDF with reportlab while logging an audit event.
 - `inject_nha_status()` is a `context_processor` that feeds pending-alert counts
   and recent alerts into every template, so the header badges work app-wide.
 
 **Auth is session-based.** Passwords are **hashed** with Werkzeug
 (`User.set_password()` / `User.check_password()` in [models.py](models.py)) —
 never stored in plain text. `login()` verifies via `check_password()`. Every
-protected route guards with `if "user" not in session`, and a global
-`@app.before_request` (`require_authenticated_session`) enforces login on all
-non-public endpoints as a safety net. `login_required` / `role_required`
-decorators exist in [app.py](app.py) for per-route role gating as sensitive
-routes (user management, alert resolution) are added.
+protected route goes through the common auth decorators. User management is in
+`routes/users.py`: admins can create users, change roles, enable/disable
+accounts, and reset passwords. Users can change their own password at
+`/account/password`.
 
 **Security config is centralised in [config.py](config.py)** and loaded via
 `app.config.from_object(Config)`. `Config.validate()` **fails fast in production**
@@ -89,29 +95,31 @@ routes (user management, alert resolution) are added.
 cookies are HTTPOnly/SameSite=Lax (and Secure in production). `debug` is driven
 by `FLASK_DEBUG` (default **off**), not hardcoded.
 
-**[models.py](models.py)** defines three tables: `User`, `Inspection`, `Alert`
-(one Inspection → many Alerts). `Inspection.defects` is a **comma-separated
-string**, not a relation; use the `defect_list` property to read it as a list.
+**[models.py](models.py)** defines `User`, `Inspection`, `Alert`, `AuditEvent`,
+`DefectType`, and `InspectionDefect`. New prediction writes use structured
+`InspectionDefect` rows for report/filter/model-feedback data. The legacy
+`Inspection.defects` comma-separated string is retained as a backwards-compatible
+cache; use the `defect_list` property in templates and reports.
 
 **Database selection is automatic** ([config.py](config.py) `get_database_url`):
 defaults to SQLite at `instance/atis.db`, switches to Postgres if `DATABASE_URL`
 is set (and rewrites legacy `postgres://` → `postgresql://`). On startup,
-`ensure_local_database()` creates tables and seeds 4 demo users **only in
+`ensure_local_database()` creates tables and seeds demo users **only in
 development** (gated on SQLite *and* `Config.SEED_DEMO_DATA`, which is false in
 production). Provision the first production admin with
 `flask --app app create-admin`. Postgres relies on the Alembic migrations in
-`migrations/` (now including `0002_password_hash`).
+`migrations/`.
 
 ## Gotchas
 
 - **Demo login aliases:** the README advertises `*@nha.gov.pk` accounts, but the
   seeded users are `*@atis.com`. `login()` maps the nha.gov.pk emails to the
   atis.com accounts. Both forms work; the stored email is the atis.com one.
-- **Missing template:** the `/inspect` route renders `live_inspection.html`,
-  which does **not** exist in `templates/` — that route currently 500s. The
-  working upload flow is `/upload` (`new_inspection.html`).
 - **Weights location vs. README:** `train_model.py` sets `project="ATIS_Project"`,
   so weights land in `ATIS_Project/tyre_safety_model/weights/best.pt`. The
   inference resolver also checks `runs/classify/...`, so both layouts work.
-- `instance/` (the SQLite DB) and `static/uploads/*` are gitignored — runtime
-  data is not committed.
+- **Artifact policy:** runtime model weights stay in Git LFS when the app needs
+  them. Datasets, dataset zips, scratch checkpoints, and generated training runs
+  stay outside the repo; see `docs/artifact_policy.md`.
+- `instance/` (the SQLite DB) and `static/uploads/*` are gitignored; runtime data
+  is not committed.

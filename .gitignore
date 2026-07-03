@@ -10,7 +10,12 @@ static/uploads/*
 !static/uploads/.gitkeep
 config/live_zones.json
 instance/
-# Large archives (dataset upload + Colab model download) — never commit
+# Large local datasets / archives. Keep these in external artifact storage, not Git.
+ATIS_Dataset/
+Tire Textures/
 *.zip
-# Scratch weight backups created during evaluation/retraining — not history
+
+# Scratch checkpoints created during evaluation/retraining are not release artifacts.
 *.bak.pt
+runs/**/weights/last*.pt
+runs/**/weights/epoch*.pt

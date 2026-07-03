@@ -58,9 +58,31 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-The app defaults to the included SQLite database at `instance/atis.db`. Copy
-`.env.example` to `.env` only if you want to override settings such as
-`DATABASE_URL`, `SECRET_KEY`, `ATIS_MODEL_PATH`, or `YOLO_DEVICE`.
+The app defaults to SQLite at `instance/atis.db`. Initialize a fresh checkout
+explicitly; the web process does not create or stamp schema on import:
+
+```bash
+python3 -m flask --app app db upgrade
+python3 -m flask --app app seed-demo-users
+```
+
+Use `python3 seed.py` only when you want to reset the local SQLite database and
+load the larger sample dashboard history. Copy `.env.example` to `.env` only if
+you want to override settings such as `DATABASE_URL`, `SECRET_KEY`,
+`ATIS_MODEL_PATH`, or `YOLO_DEVICE`.
+
+Automatic number plate recognition uses `pytesseract` and requires the system
+`tesseract` binary to be installed on hosts where plate OCR should run. If the
+binary is missing, inspection uploads still work and the plate is marked for
+ANPR review. Disable OCR with `ATIS_ANPR_ENABLED=0`; tune acceptance with
+`ATIS_ANPR_MIN_CONFIDENCE` (default `55`). Sample OCR fixtures live in
+`tests/fixtures/anpr_samples/`.
+
+After installing Tesseract, run the local smoke/tuning helper:
+
+```bash
+python3 evaluate_anpr_samples.py
+```
 
 ## Run The Dashboard
 
@@ -86,7 +108,8 @@ Demo accounts:
 Demo passwords are stored **hashed** (Werkzeug); the table above lists the
 plaintext values only so you can log in to the local demo.
 
-The `/predict` route uploads an image, runs the trained classifier from
+The `/predict` route uploads an image, auto-reads the license plate when the
+plate field is blank, runs the trained classifier from
 `runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt`, stores an
 inspection row, and creates an alert when the prediction is unsafe.
 
@@ -101,6 +124,10 @@ aliases, and enables Secure session cookies.
 export ATIS_ENV=production
 export SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
 export DATABASE_URL=postgresql+psycopg2://user:pass@host:5432/atis_db
+# Optional production image storage:
+# export ATIS_IMAGE_STORAGE=s3
+# export ATIS_S3_BUCKET=atis-inspection-images
+# export ATIS_S3_SIGNED_URLS=1
 
 python3 -m flask --app app db upgrade        # apply migrations (incl. password hashing)
 python3 -m flask --app app create-admin      # create the first admin (hashed password)
@@ -112,6 +139,12 @@ Security features active in every environment: hashed passwords, CSRF protection
 on all form posts, login rate limiting, upload size cap + image content
 validation, HTTPOnly/SameSite session cookies, and `debug` off unless
 `FLASK_DEBUG=1`. See `.env.example` for all tunables.
+
+Inspection images default to DB blob storage for demos. For production volume,
+set `ATIS_IMAGE_STORAGE=s3` and configure an S3-compatible bucket; the database
+then stores object keys and metadata instead of image bytes. S3 mode supports
+object deletion helpers, optional signed media redirects, and configurable
+client retry/timeout settings.
 
 ## CLI Model Commands
 
@@ -170,18 +203,17 @@ Run live inspection:
 python3 live_video_inspection.py --camera 0
 ```
 
-The dashboard also has a live camera area at:
+The dashboard also has a browser-camera live area at:
 
 ```text
 http://127.0.0.1:5000/live
 ```
 
-That page renders the same Python/OpenCV analysis as an MJPEG stream from
-`/live/stream`. It does not use browser webcam APIs. Configure it with
-environment variables such as `ATIS_LIVE_CAMERA`, `ATIS_LIVE_ZONES`,
-`ATIS_LIVE_DB_LOG`, `ATIS_LIVE_UNSAFE_STREAK`, and `ATIS_LIVE_COOLDOWN`.
-`ATIS_LIVE_CAMERA` can be camera index `0`, a video file path, or an OpenCV
-supported stream URL.
+That page uses the operator device camera through the browser `getUserMedia`
+API, posts sampled frames to `/api/live/analyze`, and can log a selected frame
+through the existing `/predict` upload route. The standalone
+`live_video_inspection.py` script remains available for server-side OpenCV
+camera tests with calibrated fixed zones.
 
 Runtime keys:
 
@@ -189,26 +221,42 @@ Runtime keys:
 - `p` pauses or resumes analysis.
 - `r` resets live streak counters.
 
-Live logging defaults:
+Live dashboard defaults:
 
-- An unsafe event is logged after 3 unsafe predictions in a row for the same zone.
-- Each zone has a 20 second cooldown after logging.
-- Logged frames are saved under `static/uploads/` and appear in dashboard history/alerts.
-- Use `--no-db-log` to display live predictions without writing dashboard records.
+- Frames are analyzed roughly once per second while the camera is active.
+- Live analysis is read-only; use "Capture & Log" to persist an inspection.
+- Logged frames appear in dashboard history/alerts through the normal inspection flow.
+- Configure live API limits with `ATIS_LIVE_FRAME_MAX_MB` and `ATIS_LIVE_FRAME_MAX_PIXELS`.
 
 ## Current Model Artifact
 
-The included run was trained for 50 epochs. The last logged top-1 validation
-accuracy is about 82.46%, with the best logged top-1 accuracy about 83.39%.
+ATIS currently runs a **YOLOv11 classifier** trained for `normal` vs `cracked`.
+The committed model card is at
+`runs/classify/runs/classify/ATIS_Project/tyre_safety_model/model_card.json`.
+The classifier gives the safety verdict:
 
-The current classifier labels only two classes:
+- `normal` with confidence above `ATIS_CONF_THRESHOLD` -> dashboard status `safe`
+- `cracked` / `crack` / `cracking` -> dashboard status `unsafe`, defect `Cracking`
+- low-confidence `normal` -> dashboard status `unsafe`, manual review
 
-- `normal` -> dashboard status `safe`
-- `cracked` -> dashboard status `unsafe`, defect `Cracking`
+When a tyre is classified as cracked, `atis_inference.py` uses a lightweight
+OpenCV crack localizer to draw marker boxes over likely crack regions. Those
+boxes are heuristic visual aids, not trained detector bounding boxes.
 
-The inference code is ready to map a future `bulge` class to `unsafe`, but the
-current model cannot truly detect bulges until you add `bulge` training and
-validation images and retrain.
+`train_detector.py` is present for a future YOLO detection model, but the web app
+does not currently load detector weights or claim multi-defect detection. Do not
+advertise `bulge`, `flat_spot`, or per-defect mAP metrics until the inference
+path has been switched to a trained detector and evaluated honestly.
+
+Threshold calibration and the current classifier-vs-detector decision are
+documented in `docs/model_threshold_calibration.md`.
+
+Dataset and model storage rules are documented in `docs/artifact_policy.md`.
+In short: keep runtime weights that the app loads in Git LFS, and keep datasets,
+dataset archives, scratch checkpoints, and generated training runs outside Git.
+
+> Limitations: the current model only distinguishes normal vs cracked tyres in a
+> single static image. Conditions such as under/over inflation are out of scope.
 
 ## PostgreSQL Option
 

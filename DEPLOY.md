@@ -14,6 +14,8 @@ build/run contract; the specific host is chosen separately.
   ```
   The trained model lives at
   `runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt`.
+  Dataset archives and scratch training artifacts are not deployment inputs; see
+  `docs/artifact_policy.md`.
 
 ## Build & run (Docker)
 
@@ -27,8 +29,8 @@ docker run --rm -p 8080:8080 \
 ```
 
 The Dockerfile installs CPU-only torch (keeps the image small), copies the app,
-and **fails the build** if `best.pt` is an LFS pointer stub — so a missing
-`git lfs pull` is caught at build time, not at first inference.
+and **fails the build** if the required classifier `best.pt` is missing or still
+an LFS pointer stub after the fallback download.
 
 ### Required / useful runtime env vars
 
@@ -39,11 +41,17 @@ and **fails the build** if `best.pt` is an LFS pointer stub — so a missing
 | `DATABASE_URL` | Optional. Postgres DSN; falls back to SQLite at `instance/atis.db` if unset. |
 | `PORT` | Port gunicorn binds (default `8080`; most PaaS inject this). |
 | `WEB_CONCURRENCY` | Gunicorn workers. Keep at `1` unless the instance has ≥1 GB RAM *per extra* worker (each holds a full model copy). |
+| `ATIS_IMAGE_STORAGE` | `db` by default. Use `s3` for S3-compatible object storage. |
+| `ATIS_S3_BUCKET` | Required when `ATIS_IMAGE_STORAGE=s3`. |
+| `ATIS_S3_REGION` / `ATIS_S3_ENDPOINT_URL` | Optional S3-compatible region/endpoint values, e.g. DigitalOcean Spaces or R2. |
+| `ATIS_S3_SIGNED_URLS` / `ATIS_S3_SIGNED_URL_EXPIRES` | Optional. Redirect media requests to temporary S3 URLs; default disabled, expiry `900` seconds. |
+| `ATIS_S3_CONNECT_TIMEOUT` / `ATIS_S3_READ_TIMEOUT` | Optional S3 client timeouts; defaults `3` and `10` seconds. |
+| `ATIS_S3_MAX_ATTEMPTS` / `ATIS_S3_RETRY_MODE` | Optional S3 retry config; defaults `3` attempts and `standard` mode. |
 
 ### First admin user (production)
 
-Demo users only seed on SQLite in development. In production, create the first
-admin explicitly:
+Demo users are never created by importing the app. In production, create the
+first admin explicitly:
 ```bash
 ATIS_ENV=production flask --app app create-admin
 ```
@@ -53,6 +61,54 @@ ATIS_ENV=production flask --app app create-admin
 torch + the model need **~1–2 GB RAM**; 512 MB tiers will OOM. One gunicorn
 worker with threads is the default (`gunicorn.conf.py`, `preload_app=True` so the
 model loads once and is shared copy-on-write).
+
+## Deploy to DigitalOcean App Platform
+
+The repository includes a DigitalOcean App Platform spec template at
+`.do/app.yaml.example`. It deploys the existing Dockerfile from GitHub, binds
+the service on port `8080`, provisions a PostgreSQL database, and runs one
+2 GB container because the app loads torch and YOLO weights in memory.
+
+1. Make sure `main` is pushed to GitHub:
+   ```bash
+   git push origin main
+   git lfs push origin main
+   ```
+2. Copy the template to a local, untracked spec and replace the two secret
+   placeholders:
+   ```bash
+   cp .do/app.yaml.example /tmp/atis-do-app.yaml
+   python3 -c 'import secrets; print(secrets.token_hex(32))'
+   ```
+   Set `SECRET_KEY` to the generated value, and set
+   `ATIS_ADMIN_PASSWORD` to the password for the first admin account.
+3. Create the app:
+   ```bash
+   doctl apps create --spec /tmp/atis-do-app.yaml
+   ```
+4. Watch the deployment:
+   ```bash
+   doctl apps list
+   doctl apps get <app-id>
+   doctl apps logs <app-id> web --type build --follow
+   doctl apps logs <app-id> web --type run --follow
+   ```
+
+The app will be available on its default `.ondigitalocean.app` domain after the
+deployment becomes live. Log in with the `ATIS_ADMIN_EMAIL` and
+`ATIS_ADMIN_PASSWORD` values from the spec, or with the seeded demo operator:
+`operator@nha.gov.pk` / `operator123`.
+
+Notes:
+- App Platform uses the GitHub repo as the build source. The Dockerfile can
+  recover if Git LFS pointers are present by downloading the classifier weights
+  from GitHub's raw endpoint.
+- The included database is a development PostgreSQL database. For a long-running
+  production install, switch the spec to a production DigitalOcean Managed
+  PostgreSQL cluster and keep using `DATABASE_URL`.
+- Uploaded inspection images default to DB storage for demo durability. Set
+  `ATIS_IMAGE_STORAGE=s3` to keep only object metadata in Postgres and store the
+  bytes in S3-compatible object storage.
 
 ## The Git-LFS gotcha, per host type
 
@@ -66,11 +122,15 @@ model loads once and is shared copy-on-write).
 - **Hugging Face Spaces (Docker):** Git LFS is native; the weights come down with
   the repo. **Safe.**
 
-## Persistent data (not yet wired for production)
+## Persistent Data
 
-- `instance/atis.db` (SQLite) and `static/uploads/*` are ephemeral inside a
-  container — lost on redeploy. For real deployments, point `DATABASE_URL` at
-  managed Postgres and move uploads to object storage (e.g. S3/R2/Supabase).
+- `instance/atis.db` is ephemeral inside a container. For real deployments,
+  point `DATABASE_URL` at managed Postgres.
+- Uploaded images are stored as DB blobs by default so demo rebuilds do not lose
+  the image bytes. For production volume, set `ATIS_IMAGE_STORAGE=s3` and provide
+  `ATIS_S3_BUCKET` plus optional `ATIS_S3_REGION`, `ATIS_S3_ENDPOINT_URL`, and
+  `ATIS_IMAGE_PREFIX`; the app then stores object metadata in Postgres and serves
+  bytes through `/media/inspection/<id>`.
 
 ## Deploy to Hugging Face Spaces (Docker) — recommended for the demo
 
@@ -92,7 +152,7 @@ frontmatter (`sdk: docker`, `app_port: 8080`) tells HF how to build/route it.
    |------|------|-------|
    | `SECRET_KEY` | secret | a long random string (`python3 -c 'import secrets;print(secrets.token_hex(32))'`) |
    | `ATIS_ENV` | variable | `production` |
-   | `ATIS_SEED_DEMO` | variable | `1`  ← seeds demo users so `admin@atis.com/admin123` works |
+   | `ATIS_SEED_DEMO` | variable | `1`  ← seeds demo users, including `operator@nha.gov.pk/operator123` |
 4. The Space builds, then serves the full dashboard at
    `https://<user>-<space>.hf.space`. Log in with `admin@atis.com` / `admin123`.
 
