@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+
+{% block title %}NHA - ANPR Review{% endblock %}
+{% block description %}Review inspections with missing or low-confidence plate OCR{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/history.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <span class="official-kicker">NHA Review Queue</span>
+        <h1 class="page-title">ANPR Review</h1>
+        <p class="page-subtitle">Pending inspections where plate OCR failed or scored below {{ min_confidence }}%</p>
+    </div>
+</div>
+
+<div class="table-card">
+    <div class="results-header">
+        <div class="results-title">
+            {{ icon("search", 16) }}
+            OCR Attention Required
+        </div>
+        <span class="results-count">{{ pagination.total }} found</span>
+    </div>
+    <div class="table-wrapper">
+        <table class="history-table anpr-review-table">
+            <thead>
+                <tr>
+                    <th>Inspection</th>
+                    <th>Plate Candidate</th>
+                    <th>OCR State</th>
+                    <th>Location</th>
+                    <th>Result</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for inspection in inspections %}
+                <tr>
+                    <td class="cell-time">
+                        <span class="time-main">#{{ inspection.id }}</span>
+                        <span class="time-sub">{{ inspection.timestamp.strftime('%b %d, %Y — %I:%M %p') }}</span>
+                    </td>
+                    <td class="cell-plate">
+                        {{ inspection.plate or '—' }}
+                        {% if inspection.plate_raw_text %}
+                        <span class="time-sub">{{ inspection.plate_raw_text }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="defect-tag">
+                            {{ inspection.plate_source|default('missing', true)|replace('_', ' ')|title }}
+                        </span>
+                        {% if inspection.plate_confidence is not none %}
+                        <span class="time-sub">{{ inspection.plate_confidence }}% confidence</span>
+                        {% endif %}
+                    </td>
+                    <td class="cell-loc-text">
+                        {{ inspection.location }}
+                        {% if inspection.camera %}
+                        <span class="time-sub">{{ inspection.camera }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge badge-{{ inspection.status }}">{{ inspection.status|capitalize }}</span>
+                    </td>
+                    <td>
+                        <a class="date-btn date-btn-outline" href="{{ url_for('inspection_detail', inspection_id=inspection.id) }}">Review</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <div class="empty-title">No ANPR items need review</div>
+                            <p class="empty-copy">New OCR failures and low-confidence reads will appear here.</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if pagination.pages > 1 %}
+    <nav class="pagination-bar" aria-label="ANPR review pages">
+        {% if pagination.has_prev %}
+        <a class="pagination-link" href="{{ url_for('anpr_review_queue', page=pagination.prev_num, per_page=pagination.per_page) }}">Previous</a>
+        {% else %}
+        <span class="pagination-link is-disabled">Previous</span>
+        {% endif %}
+        <span class="pagination-status">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+        {% if pagination.has_next %}
+        <a class="pagination-link" href="{{ url_for('anpr_review_queue', page=pagination.next_num, per_page=pagination.per_page) }}">Next</a>
+        {% else %}
+        <span class="pagination-link is-disabled">Next</span>
+        {% endif %}
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

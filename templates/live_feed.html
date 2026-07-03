@@ -14,9 +14,11 @@
         <h1 class="page-title">Live Tire Inspection</h1>
         <p class="page-subtitle">Your device camera streamed to the ATIS model for real-time classification.</p>
     </div>
+    {% if can_manage_alerts %}
     <a href="{{ url_for('alerts') }}" class="details-btn">
         <span class="btn-label">View Alerts</span>
     </a>
+    {% endif %}
 </div>
 
 <!-- Config for the client script (URLs + CSRF token for the capture-and-log POST). -->

@@ -42,6 +42,57 @@
     margin-bottom: 1.25rem;
 }
 
+.saved-filter-row,
+.save-filter-form {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.saved-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0.25rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--white);
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.saved-filter-chip:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+}
+
+.saved-filter-delete {
+    display: inline-flex;
+    margin-right: 0.35rem;
+}
+
+.saved-filter-delete button {
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: #fff;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.save-filter-form input[type="text"] {
+    min-height: 38px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.45rem 0.65rem;
+    font: inherit;
+}
+
 .filters-row {
     display: flex;
     gap: 0.75rem;
@@ -101,6 +152,29 @@
 .date-row {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.date-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 38px;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.date-filter input {
+    border: 0;
+    outline: none;
+    font: inherit;
+    color: var(--text-primary);
+    background: transparent;
 }
 
 .date-btn {
@@ -209,6 +283,10 @@
 
 /* Confidence */
 
+.anpr-review-table th:nth-child(n) {
+    width: auto;
+}
+
 .history-table td {
     padding: 0.85rem 1.25rem;
     border-bottom: 1px solid var(--border);
@@ -316,6 +394,43 @@
     font-weight: 600;
     color: var(--text-secondary);
     white-space: nowrap;
+}
+
+.pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--border);
+}
+
+.pagination-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.pagination-link:not(.is-disabled):hover {
+    border-color: var(--blue);
+    color: var(--blue);
+}
+
+.pagination-link.is-disabled {
+    color: var(--text-muted);
+    opacity: 0.55;
+}
+
+.pagination-status {
+    color: var(--text-muted);
+    font-size: 0.8rem;
 }
 
 /* ===== Responsive ===== */

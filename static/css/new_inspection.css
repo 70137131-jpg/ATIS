@@ -280,6 +280,50 @@
     color: var(--text-primary);
 }
 
+.plate-input-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.btn-anpr {
+    min-height: 42px;
+    border: 1px solid rgba(37, 107, 79, 0.35);
+    border-radius: 8px;
+    background: rgba(37, 107, 79, 0.08);
+    color: var(--blue);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-anpr:hover:not(:disabled) {
+    background: rgba(37, 107, 79, 0.14);
+}
+
+.btn-anpr:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.anpr-status {
+    min-height: 18px;
+    margin-top: 0.4rem;
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    line-height: 1.35;
+}
+
+.anpr-status.is-success {
+    color: var(--green);
+}
+
+.anpr-status.is-error {
+    color: var(--red);
+}
+
 .form-divider {
     height: 1px;
     background: var(--border);
@@ -426,6 +470,11 @@
     font-weight: 600;
 }
 
+.result-plate {
+    background: rgba(22, 132, 95, 0.12);
+    color: var(--green);
+}
+
 .result-empty {
     color: var(--text-secondary);
     font-size: 0.8rem;
@@ -442,4 +491,10 @@
 
 .details-link:hover {
     text-decoration: underline;
+}
+
+@media (max-width: 520px) {
+    .plate-input-row {
+        grid-template-columns: 1fr;
+    }
 }

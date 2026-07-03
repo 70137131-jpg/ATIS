@@ -1,141 +1,19 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "base.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="NHA — New Highway Inspection: Upload an image for AI analysis">
-    <title>NHA — New Inspection</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/new_inspection.css') }}">
-    <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
-</head>
+{% block title %}NHA — New Inspection{% endblock %}
+{% block description %}NHA — New Highway Inspection: Upload an image for AI analysis{% endblock %}
 
-<body>
-    <div class="layout">
-        <!-- ===== Sidebar ===== -->
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-brand">
-                <div class="sidebar-logo">NHA</div>
-                <div class="sidebar-brand-text">
-                    <span class="sidebar-title">NHA</span>
-                    <span class="sidebar-subtitle">Highway Inspection</span>
-                </div>
-            </div>
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/new_inspection.css') }}">
+{% endblock %}
 
-            <div class="sidebar-section-label">MAIN</div>
-            <nav class="sidebar-nav">
-                <a href="{{ url_for('dashboard') }}" class="nav-item" id="nav-dashboard">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="7" height="7" />
-                        <rect x="14" y="3" width="7" height="7" />
-                        <rect x="14" y="14" width="7" height="7" />
-                        <rect x="3" y="14" width="7" height="7" />
-                    </svg>
-                    <span>Dashboard</span>
-                </a>
-                <a href="{{ url_for('new_inspection') }}" class="nav-item active" id="nav-inspect">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="12" y1="8" x2="12" y2="16" />
-                        <line x1="8" y1="12" x2="16" y2="12" />
-                    </svg>
-                    <span>New Inspection</span>
-                </a>
-                <a href="{{ url_for('live_feed') }}" class="nav-item" id="nav-live">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="6" width="13" height="12" rx="2" />
-                        <path d="M16 10l5-3v10l-5-3z" />
-                    </svg>
-                    <span>Live Feed</span>
-                </a>
-                <a href="{{ url_for('alerts') }}" class="nav-item" id="nav-alerts">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path
-                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                        <line x1="12" y1="9" x2="12" y2="13" />
-                        <line x1="12" y1="17" x2="12.01" y2="17" />
-                    </svg>
-                    <span>Alerts</span>
-                </a>
-                <a href="{{ url_for('history') }}" class="nav-item" id="nav-history">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    <span>History</span>
-                </a>
-                <a href="{{ url_for('reports') }}" class="nav-item" id="nav-reports">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <polyline points="14 2 14 8 20 8" />
-                        <line x1="16" y1="13" x2="8" y2="13" />
-                        <line x1="16" y1="17" x2="8" y2="17" />
-                        <polyline points="10 9 9 9 8 9" />
-                    </svg>
-                    <span>Reports</span>
-                </a>
-            </nav>
-
-            <button class="sidebar-collapse" id="sidebar-collapse">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 18 9 12 15 6" />
-                </svg>
-                <span>Collapse</span>
-            </button>
-        </aside>
-
-        <!-- ===== Main Area ===== -->
-        <div class="main-area">
-            <!-- Top Bar -->
-            <header class="topbar">
-                <div class="topbar-left">
-                    <span class="status-dot"></span>
-                    <span class="status-text">NHA Secure Network</span>
-                </div>
-                <div class="topbar-right">
-                    <div class="topbar-user">
-                        <div class="user-avatar">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                <circle cx="12" cy="7" r="4" />
-                            </svg>
-                        </div>
-                        <div class="user-info">
-                            <span class="user-name">{{ role }} User</span>
-                            <span class="user-role">{{ role }}</span>
-                        </div>
-                    </div>
-                    <a href="{{ url_for('logout') }}" class="topbar-icon-btn" aria-label="Sign out" title="Sign out">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                            <polyline points="16 17 21 12 16 7" />
-                            <line x1="21" y1="12" x2="9" y2="12" />
-                        </svg>
-                    </a>
-                </div>
-            </header>
-
-            <!-- Page Content -->
-            <main class="content">
+{% block content %}
                 <!-- Page Header -->
                 <div class="page-header">
                     <div>
                         <span class="official-kicker">NHA Field Intake</span>
                         <h1 class="page-title">New Inspection</h1>
-                        <p class="page-subtitle">Upload a checkpoint image for automated defect analysis</p>
+                        <p class="page-subtitle">Upload a checkpoint image to classify tyre safety and mark likely cracks</p>
                     </div>
                 </div>
 
@@ -203,7 +81,7 @@
                                 <div class="image-preview" id="image-preview" style="display:none;">
                                     <div class="preview-stage" id="preview-stage">
                                         <img id="preview-img" src="" alt="Inspection image preview">
-                                        <canvas id="bbox-canvas" aria-label="Detected defect bounding boxes"></canvas>
+                                        <canvas id="bbox-canvas" aria-label="Likely crack marker boxes"></canvas>
                                     </div>
                                     <button type="button" class="remove-btn" id="remove-btn" title="Remove image">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -232,8 +110,14 @@
                                 <label for="plate-input" class="form-label">License Plate
                                     <span class="optional-tag">Optional</span>
                                 </label>
-                                <input type="text" name="plate" id="plate-input" class="form-input"
-                                    placeholder="e.g. ABC-1234" maxlength="20">
+                                <div class="plate-input-row">
+                                    <input type="text" name="plate" id="plate-input" class="form-input"
+                                        placeholder="e.g. ABC-1234" maxlength="20">
+                                    <button type="button" class="btn-anpr" id="anpr-btn" data-anpr-url="{{ url_for('anpr_preview') }}">
+                                        Read Plate
+                                    </button>
+                                </div>
+                                <p class="anpr-status" id="anpr-status">Leave blank to auto-read during analysis.</p>
                             </div>
 
                             <div class="form-group">
@@ -273,8 +157,8 @@
                             </button>
 
                             <p class="submit-hint">
-                                The NHA model will analyze the image and detect any defects.
-                                Results are saved automatically.
+                                The NHA model classifies tyre safety, marks likely crack regions, and reads
+                                the number plate when the plate field is blank. Results are saved automatically.
                             </p>
 
                             <div class="analysis-result" id="analysis-result" style="display:none;">
@@ -293,296 +177,8 @@
                         </div>
                     </div>
                 </form>
-            </main>
-        </div>
-    </div>
+{% endblock %}
 
-    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
-    <script>
-        // ── Drag & Drop + File Input ──
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('image-input');
-        const placeholder = document.getElementById('drop-placeholder');
-        const preview = document.getElementById('image-preview');
-        const previewStage = document.getElementById('preview-stage');
-        const previewImg = document.getElementById('preview-img');
-        const bboxCanvas = document.getElementById('bbox-canvas');
-        const removeBtn = document.getElementById('remove-btn');
-        const form = document.getElementById('inspect-form');
-        const submitBtn = document.getElementById('submit-btn');
-        const resultPanel = document.getElementById('analysis-result');
-        const resultStatus = document.getElementById('analysis-status');
-        const resultConfidence = document.getElementById('analysis-confidence');
-        const resultDefects = document.getElementById('analysis-defects');
-        const detailLink = document.getElementById('detail-link');
-
-        let latestBoxes = [];
-
-        const severityColors = {
-            Critical: '#ef4444',
-            Medium: '#f97316',
-            Low: '#facc15',
-        };
-
-        function normalizeSeverity(value) {
-            const severity = String(value || 'Low').toLowerCase();
-            if (severity === 'critical' || severity === 'high') return 'Critical';
-            if (severity === 'medium' || severity === 'moderate') return 'Medium';
-            return 'Low';
-        }
-
-        // Click to browse
-        dropZone.addEventListener('click', (e) => {
-            if (e.target === removeBtn || removeBtn.contains(e.target)) return;
-            fileInput.click();
-        });
-
-        // Drag events
-        ['dragenter', 'dragover'].forEach(evt => {
-            dropZone.addEventListener(evt, (e) => {
-                e.preventDefault();
-                dropZone.classList.add('drag-over');
-            });
-        });
-
-        ['dragleave', 'drop'].forEach(evt => {
-            dropZone.addEventListener(evt, (e) => {
-                e.preventDefault();
-                dropZone.classList.remove('drag-over');
-            });
-        });
-
-        dropZone.addEventListener('drop', (e) => {
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                fileInput.files = files;
-                showPreview(files[0]);
-            }
-        });
-
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files.length > 0) {
-                showPreview(fileInput.files[0]);
-            }
-        });
-
-        function showPreview(file) {
-            clearBoxes();
-            resultPanel.style.display = 'none';
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                previewImg.src = e.target.result;
-                placeholder.style.display = 'none';
-                preview.style.display = 'flex';
-            };
-            reader.readAsDataURL(file);
-        }
-
-        removeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            fileInput.value = '';
-            preview.style.display = 'none';
-            placeholder.style.display = 'flex';
-            resultPanel.style.display = 'none';
-            clearBoxes();
-        });
-
-        function setSubmitLoading(isLoading) {
-            submitBtn.querySelector('.btn-text').style.display = 'none';
-            submitBtn.querySelector('.btn-loading').style.display = 'inline-flex';
-            submitBtn.disabled = true;
-            if (!isLoading) {
-                submitBtn.querySelector('.btn-text').style.display = 'inline';
-                submitBtn.querySelector('.btn-loading').style.display = 'none';
-                submitBtn.disabled = false;
-            }
-        }
-
-        function clearBoxes() {
-            latestBoxes = [];
-            const ctx = bboxCanvas.getContext('2d');
-            ctx.clearRect(0, 0, bboxCanvas.width, bboxCanvas.height);
-        }
-
-        function normalizeBox(box) {
-            if (Array.isArray(box.bbox)) {
-                return {
-                    x1: Number(box.bbox[0]),
-                    y1: Number(box.bbox[1]),
-                    x2: Number(box.bbox[2]),
-                    y2: Number(box.bbox[3]),
-                };
-            }
-
-            if ('x' in box && 'y' in box && 'width' in box && 'height' in box) {
-                return {
-                    x1: Number(box.x),
-                    y1: Number(box.y),
-                    x2: Number(box.x) + Number(box.width),
-                    y2: Number(box.y) + Number(box.height),
-                };
-            }
-
-            return {
-                x1: Number(box.x1),
-                y1: Number(box.y1),
-                x2: Number(box.x2),
-                y2: Number(box.y2),
-            };
-        }
-
-        function getImageRectInsideStage() {
-            const stageRect = previewStage.getBoundingClientRect();
-            const imageRect = previewImg.getBoundingClientRect();
-
-            return {
-                left: imageRect.left - stageRect.left,
-                top: imageRect.top - stageRect.top,
-                width: imageRect.width,
-                height: imageRect.height,
-            };
-        }
-
-        function resizeCanvasToStage() {
-            const rect = previewStage.getBoundingClientRect();
-            const scale = window.devicePixelRatio || 1;
-
-            bboxCanvas.style.width = `${rect.width}px`;
-            bboxCanvas.style.height = `${rect.height}px`;
-            bboxCanvas.width = Math.round(rect.width * scale);
-            bboxCanvas.height = Math.round(rect.height * scale);
-
-            const ctx = bboxCanvas.getContext('2d');
-            ctx.setTransform(scale, 0, 0, scale, 0, 0);
-            return ctx;
-        }
-
-        function drawBoxes(boxes) {
-            latestBoxes = Array.isArray(boxes) ? boxes : [];
-
-            if (!previewImg.complete || !previewImg.naturalWidth) {
-                previewImg.addEventListener('load', () => drawBoxes(latestBoxes), { once: true });
-                return;
-            }
-
-            const ctx = resizeCanvasToStage();
-            ctx.clearRect(0, 0, bboxCanvas.width, bboxCanvas.height);
-
-            const imageRect = getImageRectInsideStage();
-            const scaleX = imageRect.width / previewImg.naturalWidth;
-            const scaleY = imageRect.height / previewImg.naturalHeight;
-
-            latestBoxes.forEach((box) => {
-                const normalized = normalizeBox(box);
-                if ([normalized.x1, normalized.y1, normalized.x2, normalized.y2].some(Number.isNaN)) return;
-
-                const boxMax = Math.max(normalized.x1, normalized.y1, normalized.x2, normalized.y2);
-                if (boxMax <= 1) {
-                    normalized.x1 *= previewImg.naturalWidth;
-                    normalized.x2 *= previewImg.naturalWidth;
-                    normalized.y1 *= previewImg.naturalHeight;
-                    normalized.y2 *= previewImg.naturalHeight;
-                }
-
-                const severity = normalizeSeverity(box.severity || box.level);
-                const color = severityColors[severity] || severityColors.Low;
-                const x = imageRect.left + normalized.x1 * scaleX;
-                const y = imageRect.top + normalized.y1 * scaleY;
-                const width = (normalized.x2 - normalized.x1) * scaleX;
-                const height = (normalized.y2 - normalized.y1) * scaleY;
-                const label = [severity, box.label].filter(Boolean).join(' - ');
-
-                ctx.lineWidth = 3;
-                ctx.strokeStyle = color;
-                ctx.fillStyle = color;
-                ctx.strokeRect(x, y, width, height);
-
-                if (label) {
-                    ctx.font = '600 12px Inter, sans-serif';
-                    const labelWidth = ctx.measureText(label).width + 12;
-                    const labelHeight = 22;
-                    const labelY = y > labelHeight ? y - labelHeight : y;
-
-                    ctx.fillRect(x, labelY, labelWidth, labelHeight);
-                    ctx.fillStyle = severity === 'Low' ? '#111827' : '#ffffff';
-                    ctx.fillText(label, x + 6, labelY + 15);
-                }
-            });
-        }
-
-        function renderResult(data) {
-            const defects = Array.isArray(data.defects) ? data.defects : [];
-
-            resultStatus.textContent = `${(data.status || 'complete').toUpperCase()} result`;
-            resultConfidence.textContent = data.confidence !== undefined ? `${data.confidence}% confidence` : '';
-            resultDefects.replaceChildren();
-
-            if (defects.length) {
-                defects.forEach((defect) => {
-                    const tag = document.createElement('span');
-                    tag.className = 'result-defect';
-                    tag.textContent = defect;
-                    resultDefects.appendChild(tag);
-                });
-            } else {
-                const empty = document.createElement('span');
-                empty.className = 'result-empty';
-                empty.textContent = 'No defects returned';
-                resultDefects.appendChild(empty);
-            }
-
-            if (data.detail_url) {
-                detailLink.href = data.detail_url;
-                detailLink.style.display = 'inline-flex';
-            } else {
-                detailLink.style.display = 'none';
-            }
-
-            resultPanel.style.display = 'block';
-        }
-
-        window.addEventListener('resize', () => {
-            if (latestBoxes.length) drawBoxes(latestBoxes);
-        });
-
-        // Submit with API response so bounding boxes can be drawn on the preview.
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            setSubmitLoading(true);
-            resultPanel.style.display = 'none';
-            clearBoxes();
-
-            try {
-                const response = await fetch(form.action, {
-                    method: 'POST',
-                    body: new FormData(form),
-                    headers: {
-                        Accept: 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Analysis failed with status ${response.status}`);
-                }
-
-                const data = await response.json();
-                renderResult(data);
-                drawBoxes(data.bounding_boxes || data.boxes || data.detections || []);
-            } catch (error) {
-                resultStatus.textContent = 'Analysis failed';
-                resultConfidence.textContent = '';
-                const errorMessage = document.createElement('span');
-                errorMessage.className = 'result-empty';
-                errorMessage.textContent = error.message;
-                resultDefects.replaceChildren(errorMessage);
-                detailLink.style.display = 'none';
-                resultPanel.style.display = 'block';
-            } finally {
-                setSubmitLoading(false);
-            }
-        });
-    </script>
-</body>
-
-</html>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/new_inspection.js') }}"></script>
+{% endblock %}

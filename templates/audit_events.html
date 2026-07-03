@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+
+{% block title %}NHA — Audit Log{% endblock %}
+{% block description %}NHA — Audit events{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_users.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <span class="official-kicker">NHA Administration</span>
+        <h1 class="page-title">Audit Log</h1>
+        <p class="page-subtitle">Review workflow, account, report, and model-feedback events</p>
+    </div>
+</div>
+
+<form class="admin-panel audit-filter-form" method="GET" action="{{ url_for('audit_events') }}">
+    <label>
+        <span>Action</span>
+        <input type="text" name="action" value="{{ filters.action }}" placeholder="report.exported">
+    </label>
+    <label>
+        <span>Actor</span>
+        <input type="text" name="actor" value="{{ filters.actor }}" placeholder="user@example.com">
+    </label>
+    <label>
+        <span>Entity</span>
+        <select name="entity_type">
+            <option value="">All entities</option>
+            {% for entity_type in entity_types %}
+            <option value="{{ entity_type }}" {{ 'selected' if filters.entity_type == entity_type }}>{{ entity_type }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>
+        <span>From</span>
+        <input type="date" name="date_from" value="{{ filters.date_from }}">
+    </label>
+    <label>
+        <span>To</span>
+        <input type="date" name="date_to" value="{{ filters.date_to }}">
+    </label>
+    <button class="primary-action" type="submit">Apply</button>
+    <a class="small-action audit-clear-link" href="{{ url_for('audit_events') }}">Clear</a>
+</form>
+
+<div class="admin-panel users-panel">
+    <div class="panel-header">
+        <h2>Events</h2>
+        <span>{{ pagination.total }} found</span>
+    </div>
+    <div class="admin-table-wrap">
+        <table class="admin-table audit-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Action</th>
+                    <th>Actor</th>
+                    <th>Entity</th>
+                    <th>IP</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in events %}
+                <tr>
+                    <td>{{ event.created_at.strftime('%b %d, %Y %I:%M %p') }}</td>
+                    <td><span class="audit-action">{{ event.action }}</span></td>
+                    <td>{{ event.actor_email or 'System' }}</td>
+                    <td>{{ event.entity_type or '—' }}{% if event.entity_id %} #{{ event.entity_id }}{% endif %}</td>
+                    <td>{{ event.ip_address or '—' }}</td>
+                    <td><code class="audit-details">{{ event.details or '{}' }}</code></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            {{ icon("clock", 34, 1.8) }}
+                            <div class="empty-title">No audit events found</div>
+                            <p class="empty-copy">Workflow and account actions will appear here.</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if pagination.pages > 1 %}
+    <nav class="pagination-bar" aria-label="Audit pages">
+        {% if pagination.has_prev %}
+        <a class="pagination-link" href="{{ url_for('audit_events', page=pagination.prev_num, per_page=pagination.per_page, **pagination_params) }}">Previous</a>
+        {% else %}
+        <span class="pagination-link is-disabled">Previous</span>
+        {% endif %}
+        <span class="pagination-status">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+        {% if pagination.has_next %}
+        <a class="pagination-link" href="{{ url_for('audit_events', page=pagination.next_num, per_page=pagination.per_page, **pagination_params) }}">Next</a>
+        {% else %}
+        <span class="pagination-link is-disabled">Next</span>
+        {% endif %}
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

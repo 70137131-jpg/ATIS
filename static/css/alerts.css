@@ -197,6 +197,56 @@
     vertical-align: middle;
 }
 
+.cell-alert-severity,
+.cell-owner {
+    line-height: 1.5;
+}
+
+.priority-badge {
+    display: inline-block;
+    padding: 0.18rem 0.55rem;
+    border-radius: 20px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    margin-right: 0.3rem;
+}
+
+.priority-low {
+    background: rgba(16, 185, 129, 0.1);
+    color: #047857;
+}
+
+.priority-medium {
+    background: rgba(66, 133, 244, 0.1);
+    color: #2563eb;
+}
+
+.priority-high {
+    background: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+}
+
+.priority-critical {
+    background: rgba(239, 68, 68, 0.12);
+    color: #b91c1c;
+}
+
+.severity-text,
+.owner-sub {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.owner-main {
+    display: block;
+    max-width: 190px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
 /* Cell: Status */
 .status-badge {
     display: inline-block;
@@ -242,6 +292,117 @@
     white-space: nowrap;
 }
 
+.inline-alert-action {
+    display: inline;
+    margin: 0;
+}
+
+.alert-detail-row td {
+    padding: 0;
+    background: #f8fafc;
+    white-space: normal;
+}
+
+.alert-workflow-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+    gap: 1rem;
+    padding: 1rem 1.25rem 1.25rem;
+    border-top: 1px solid var(--border);
+}
+
+.alert-details-form {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    align-items: end;
+}
+
+.alert-details-form label,
+.alert-comment-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.alert-details-form select,
+.alert-details-form input,
+.alert-comment-form textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.6rem;
+    font: inherit;
+    background: var(--white);
+    color: var(--text-primary);
+}
+
+.workflow-save-btn {
+    border: 0;
+    border-radius: var(--radius-sm);
+    padding: 0.55rem 0.8rem;
+    background: var(--blue);
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.alert-comment-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.8rem;
+}
+
+.alert-comment-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.alert-comment-form textarea {
+    min-height: 76px;
+    resize: vertical;
+}
+
+.alert-history {
+    padding: 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+}
+
+.history-title {
+    display: block;
+    margin-bottom: 0.45rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.history-entry {
+    padding: 0.45rem 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.history-entry:first-of-type {
+    border-top: 0;
+}
+
+.history-entry span {
+    display: block;
+    color: var(--text-primary);
+}
+
+.history-entry small {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--text-muted);
+}
+
 .action-btn {
     width: 30px;
     height: 30px;
@@ -276,6 +437,53 @@
     transform: scale(1.05);
 }
 
+.action-resolve {
+    background: var(--text-primary);
+    color: #fff;
+}
+
+.action-resolve:hover {
+    background: #111827;
+    transform: scale(1.05);
+}
+
+.pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--border);
+}
+
+.pagination-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.pagination-link:not(.is-disabled):hover {
+    border-color: var(--green);
+    color: var(--green);
+}
+
+.pagination-link.is-disabled {
+    color: var(--text-muted);
+    opacity: 0.55;
+}
+
+.pagination-status {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
     .alert-tabs {
@@ -285,5 +493,10 @@
 
     .pending-counter {
         margin-top: 0.5rem;
+    }
+
+    .alert-workflow-panel,
+    .alert-details-form {
+        grid-template-columns: 1fr;
     }
 }

@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}NHA - User Management{% endblock %}
+{% block description %}NHA user and account management{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_users.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <span class="official-kicker">Administration</span>
+        <h1 class="page-title">User Management</h1>
+        <p class="page-subtitle">Manage account access, roles, and password resets</p>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="flash-stack">
+    {% for category, message in messages %}
+    <div class="flash-line flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+<div class="admin-grid">
+    <section class="admin-panel">
+        <div class="panel-header">
+            <h2>Create User</h2>
+        </div>
+        <form method="POST" action="{{ url_for('admin_users') }}" class="account-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>
+                <span>Email</span>
+                <input type="email" name="email" autocomplete="email" required>
+            </label>
+            <label>
+                <span>Role</span>
+                <select name="role" required>
+                    {% for option in valid_roles %}
+                    <option value="{{ option }}" {{ 'selected' if option == 'Operator' }}>{{ option }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                <span>Temporary Password</span>
+                <input type="password" name="password" autocomplete="new-password" minlength="8" required>
+            </label>
+            <button type="submit" class="primary-action">Create</button>
+        </form>
+    </section>
+
+    <section class="admin-panel users-panel">
+        <div class="panel-header">
+            <h2>Accounts</h2>
+            <span>{{ users|length }} total</span>
+        </div>
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for account in users %}
+                    <tr>
+                        <td class="email-cell">{{ account.email }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('update_user_role', user_id=account.id) }}" class="inline-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <select name="role" aria-label="Role for {{ account.email }}">
+                                    {% for option in valid_roles %}
+                                    <option value="{{ option }}" {{ 'selected' if account.role == option }}>{{ option }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="small-action">Save</button>
+                            </form>
+                        </td>
+                        <td>
+                            <span class="account-status {{ 'is-active' if account.is_active else 'is-disabled' }}">
+                                {{ 'Active' if account.is_active else 'Disabled' }}
+                            </span>
+                        </td>
+                        <td>{{ account.created_at.strftime('%b %d, %Y') if account.created_at else '-' }}</td>
+                        <td class="actions-cell">
+                            <form method="POST" action="{{ url_for('reset_user_password', user_id=account.id) }}" class="inline-form password-reset-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="password" name="password" placeholder="New password" minlength="8" aria-label="New password for {{ account.email }}" required>
+                                <button type="submit" class="small-action">Reset</button>
+                            </form>
+                            {% if account.is_active %}
+                            <form method="POST" action="{{ url_for('disable_user', user_id=account.id) }}" class="inline-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="small-action danger-action" {{ 'disabled' if account.id == current_user_id }}>Disable</button>
+                            </form>
+                            {% else %}
+                            <form method="POST" action="{{ url_for('enable_user', user_id=account.id) }}" class="inline-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="small-action">Enable</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5">
+                            <div class="empty-state">
+                                <div class="empty-title">No users found</div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

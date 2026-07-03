@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}NHA - Operations Management{% endblock %}
+{% block description %}NHA operational location and camera management{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_users.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <span class="official-kicker">Administration</span>
+        <h1 class="page-title">Operations Management</h1>
+        <p class="page-subtitle">Manage inspection locations, camera assignments, and active coverage</p>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="flash-stack">
+    {% for category, message in messages %}
+    <div class="flash-line flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+<div class="admin-grid operations-form-grid">
+    <section class="admin-panel">
+        <div class="panel-header">
+            <h2>Create Location</h2>
+        </div>
+        <form method="POST" action="{{ url_for('create_location') }}" class="account-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>
+                <span>Name</span>
+                <input type="text" name="name" maxlength="200" required>
+            </label>
+            <label>
+                <span>Zone</span>
+                <input type="text" name="zone" maxlength="80">
+            </label>
+            <button type="submit" class="primary-action">Create Location</button>
+        </form>
+    </section>
+
+    <section class="admin-panel">
+        <div class="panel-header">
+            <h2>Create Camera</h2>
+        </div>
+        <form method="POST" action="{{ url_for('create_camera') }}" class="account-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>
+                <span>Name</span>
+                <input type="text" name="name" maxlength="20" required>
+            </label>
+            <label>
+                <span>Location</span>
+                <select name="location_id" required>
+                    <option value="">Choose location</option>
+                    {% for location in locations %}
+                    <option value="{{ location.id }}">{{ location.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                <span>Zone</span>
+                <input type="text" name="zone" maxlength="80">
+            </label>
+            <label>
+                <span>Assigned User</span>
+                <select name="assigned_user_id">
+                    <option value="">Unassigned</option>
+                    {% for account in assignable_users %}
+                    <option value="{{ account.id }}">{{ account.email }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <button type="submit" class="primary-action">Create Camera</button>
+        </form>
+    </section>
+</div>
+
+<section class="admin-panel operations-section">
+    <div class="panel-header">
+        <h2>Locations</h2>
+        <span>{{ locations|length }} total</span>
+    </div>
+    <div class="admin-table-wrap">
+        <table class="admin-table operations-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Zone</th>
+                    <th>Status</th>
+                    <th>Cameras</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for location in locations %}
+                <tr>
+                    <td>
+                        <form method="POST" action="{{ url_for('update_location', location_id=location.id) }}" class="inline-form operation-inline-form" id="location-form-{{ location.id }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="text" name="name" value="{{ location.name }}" maxlength="200" aria-label="Location name" required>
+                        </form>
+                    </td>
+                    <td>
+                        <input form="location-form-{{ location.id }}" type="text" name="zone" value="{{ location.zone or '' }}" maxlength="80" aria-label="Location zone">
+                    </td>
+                    <td>
+                        <label class="inline-toggle">
+                            <input form="location-form-{{ location.id }}" type="checkbox" name="is_active" {{ 'checked' if location.is_active }}>
+                            <span>{{ 'Active' if location.is_active else 'Disabled' }}</span>
+                        </label>
+                    </td>
+                    <td>{{ location.cameras|length }}</td>
+                    <td class="actions-cell">
+                        <button form="location-form-{{ location.id }}" type="submit" class="small-action">Save</button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5">
+                        <div class="empty-state">
+                            <div class="empty-title">No locations found</div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="admin-panel operations-section">
+    <div class="panel-header">
+        <h2>Cameras</h2>
+        <span>{{ cameras|length }} total</span>
+    </div>
+    <div class="admin-table-wrap">
+        <table class="admin-table operations-table cameras-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Location</th>
+                    <th>Zone</th>
+                    <th>Assigned User</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for camera in cameras %}
+                <tr>
+                    <td>
+                        <form method="POST" action="{{ url_for('update_camera', camera_id=camera.id) }}" class="inline-form operation-inline-form" id="camera-form-{{ camera.id }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="text" name="name" value="{{ camera.name }}" maxlength="20" aria-label="Camera name" required>
+                        </form>
+                    </td>
+                    <td>
+                        <select form="camera-form-{{ camera.id }}" name="location_id" aria-label="Camera location" required>
+                            {% for location in locations %}
+                            <option value="{{ location.id }}" {{ 'selected' if camera.location_id == location.id }}>{{ location.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <input form="camera-form-{{ camera.id }}" type="text" name="zone" value="{{ camera.zone or '' }}" maxlength="80" aria-label="Camera zone">
+                    </td>
+                    <td>
+                        <select form="camera-form-{{ camera.id }}" name="assigned_user_id" aria-label="Assigned user">
+                            <option value="">Unassigned</option>
+                            {% for account in assignable_users %}
+                            <option value="{{ account.id }}" {{ 'selected' if camera.assigned_user_id == account.id }}>{{ account.email }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <label class="inline-toggle">
+                            <input form="camera-form-{{ camera.id }}" type="checkbox" name="is_active" {{ 'checked' if camera.is_active }}>
+                            <span>{{ 'Active' if camera.is_active else 'Disabled' }}</span>
+                        </label>
+                    </td>
+                    <td class="actions-cell">
+                        <button form="camera-form-{{ camera.id }}" type="submit" class="small-action">Save</button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <div class="empty-title">No cameras found</div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

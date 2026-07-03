@@ -277,7 +277,11 @@
             if (!blob) { analysing = false; scheduleAnalyze(); return; }
             var form = new FormData();
             form.append("frame", blob, "frame.jpg");
-            return fetch(ANALYZE_URL, { method: "POST", body: form })
+            return fetch(ANALYZE_URL, {
+                method: "POST",
+                body: form,
+                headers: { "X-CSRFToken": CSRF }
+            })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (data) { if (data && !data.error) renderResult(data); });
         }).catch(function () { /* transient network/inference error; keep going */ })

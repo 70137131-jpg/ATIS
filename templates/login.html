@@ -78,19 +78,7 @@
         </div>
     </div>
 
-    <script>
-        // Toggle password visibility
-        const toggleBtn = document.getElementById('toggle-password');
-        const passwordInput = document.getElementById('password');
-        toggleBtn.addEventListener('click', () => {
-            const isPassword = passwordInput.type === 'password';
-            passwordInput.type = isPassword ? 'text' : 'password';
-        });
-
-        document.getElementById('login-form').addEventListener('submit', () => {
-            document.getElementById('signin-btn').classList.add('is-loading');
-        });
-    </script>
+    <script src="{{ url_for('static', filename='js/login.js') }}"></script>
 </body>
 
 </html>

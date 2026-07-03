@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}NHA — Duplicate Comparison{% endblock %}
+{% block description %}NHA — Duplicate inspection comparison{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/inspection.css') }}">
+{% endblock %}
+
+{% macro inspection_panel(inspection, side) %}
+<div class="detail-card duplicate-panel">
+    <div class="detail-card-header">
+        <span>{{ side }} Inspection #{{ inspection.id }}</span>
+    </div>
+    <div class="duplicate-image-frame">
+        {% if inspection.image_data or inspection.image_path or inspection.image_object_key %}
+        <img src="{{ url_for('inspection_image', inspection_id=inspection.id) }}" alt="Inspection {{ inspection.id }} image">
+        {% else %}
+        <span>No image available</span>
+        {% endif %}
+    </div>
+    <div class="detail-rows">
+        <div class="detail-row"><span class="detail-label">Timestamp</span><span class="detail-value">{{ inspection.timestamp.strftime('%b %d, %Y — %I:%M %p') }}</span></div>
+        <div class="detail-row"><span class="detail-label">Plate</span><span class="detail-value">{{ inspection.plate or '—' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Location</span><span class="detail-value">{{ inspection.location }}</span></div>
+        <div class="detail-row"><span class="detail-label">Camera</span><span class="detail-value">{{ inspection.camera or '—' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Status</span><span class="badge badge-{{ inspection.status }}">{{ inspection.status|capitalize }}</span></div>
+        <div class="detail-row"><span class="detail-label">Confidence</span><span class="detail-value">{{ inspection.confidence }}%</span></div>
+        <div class="detail-row"><span class="detail-label">Review</span><span class="detail-value">{{ inspection.review_status|replace('_', ' ')|title }}</span></div>
+        <div class="detail-row"><span class="detail-label">Correction</span><span class="detail-value">{{ inspection.correction_label or '—' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Checksum</span><span class="detail-value checksum-value">{{ inspection.image_checksum }}</span></div>
+    </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <span class="official-kicker">NHA Records</span>
+        <h1 class="page-title">Duplicate Upload Comparison</h1>
+        <p class="page-subtitle">These inspections share the same image checksum</p>
+    </div>
+</div>
+
+<div class="duplicate-grid">
+    {{ inspection_panel(left, "Primary") }}
+    {{ inspection_panel(right, "Matched") }}
+</div>
+{% endblock %}
