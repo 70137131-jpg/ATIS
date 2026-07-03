@@ -212,7 +212,7 @@ def create_app(config_object=Config, config_overrides=None):
     register_auth_routes(flask_app, limiter)
     register_alert_routes(flask_app)
     register_audit_routes(flask_app)
-    register_inspection_routes(flask_app)
+    register_inspection_routes(flask_app, limiter)
     register_live_routes(flask_app, limiter)
     register_operation_routes(flask_app)
     register_report_routes(flask_app)

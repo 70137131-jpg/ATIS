@@ -710,7 +710,7 @@ def predict():
     return redirect(url_for("inspection_detail", inspection_id=inspection.id))
 
 
-def register_routes(app):
+def register_routes(app, limiter):
     app.add_url_rule("/history", "history", history)
     app.add_url_rule("/review/anpr", "anpr_review_queue", anpr_review_queue)
     app.add_url_rule("/history/saved-filters", "save_history_filter", save_history_filter, methods=["POST"])
@@ -734,5 +734,17 @@ def register_routes(app):
     )
     app.add_url_rule("/media/inspection/<int:inspection_id>", "inspection_image", inspection_image)
     app.add_url_rule("/inspect", "new_inspection", new_inspection)
-    app.add_url_rule("/api/anpr/preview", "anpr_preview", anpr_preview, methods=["POST"])
-    app.add_url_rule("/predict", "predict", predict, methods=["POST"])
+    # Inference and OCR are the most expensive requests the app serves (seconds
+    # of CPU each on a 1 GB instance), so both are rate-limited per client IP.
+    app.add_url_rule(
+        "/api/anpr/preview",
+        "anpr_preview",
+        limiter.limit("30 per minute")(anpr_preview),
+        methods=["POST"],
+    )
+    app.add_url_rule(
+        "/predict",
+        "predict",
+        limiter.limit("20 per minute; 200 per hour")(predict),
+        methods=["POST"],
+    )

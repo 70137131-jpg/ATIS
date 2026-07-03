@@ -21,6 +21,9 @@ import app as atis_app  # noqa: E402
 from models import db, User  # noqa: E402
 
 atis_app.app.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
+# The whole suite runs in seconds from one client IP, so per-minute rate limits
+# on /login, /predict, etc. would trip mid-run. Disable limiting under test.
+atis_app.limiter.enabled = False
 
 
 @pytest.fixture()
