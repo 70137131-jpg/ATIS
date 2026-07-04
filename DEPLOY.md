@@ -4,6 +4,49 @@ The dashboard is a Flask app that lazy-loads a YOLOv11 classifier (torch, CPU).
 It is packaged as a Docker image and served by gunicorn. This note covers the
 build/run contract; the specific host is chosen separately.
 
+## Production go-live checklist
+
+Deploying the container is not the same as being production-ready. Before
+trusting verdicts from a real checkpoint, work through every line:
+
+**Scope (what this system is)**
+- [ ] Stakeholders know the model is a binary `normal` vs `cracked` **classifier**.
+      The overlay boxes are heuristic OpenCV visual markers, not trained
+      detections. Do not promise bulge, puncture, flat-spot, inflation,
+      tread-depth, or per-defect localization — see `model_card.json`
+      `known_limitations` and README "Model scope".
+
+**Model evidence**
+- [ ] Held-out test metrics (cracked recall, false-pass rate, false-flag rate,
+      confusion matrix, threshold sweep) are recorded in `model_card.json`
+      (`test_metrics`). Re-run `evaluate_model.py` after any retrain.
+- [ ] **Field validation on the target cameras** — the training data is mostly
+      controlled/web imagery. Pilot on the real checkpoint feed and measure
+      recall/false-flag across: day + night (with checkpoint lighting), wet and
+      dirty tyres, motion blur, partial tyres in frame, different vehicle
+      classes, shadows/glare, and deliberate non-tyre inputs. Do not enforce
+      verdicts until this data exists.
+
+**Persistence & data**
+- [ ] `DATABASE_URL` points at managed PostgreSQL (SQLite in a container is
+      ephemeral and single-writer).
+- [ ] `ATIS_IMAGE_STORAGE=s3` with `ATIS_S3_BUCKET` (DB-blob storage is a demo
+      default; images bloat Postgres fast).
+- [ ] Automated DB backups are enabled **and a restore has been rehearsed once**.
+- [ ] A retention/deletion policy exists for inspection images and audit rows
+      (they contain plates and IP addresses — that is personal data).
+
+**Runtime**
+- [ ] `SECRET_KEY` set (the app refuses to boot without it), `ATIS_ENV=production`.
+- [ ] Demo seeding OFF (`ATIS_SEED_DEMO` unset) — or, for a demo host, set
+      `ATIS_DEMO_PASSWORD`. The login-page credentials box is hidden in
+      production unless `ATIS_SHOW_DEMO_CREDENTIALS=1`.
+- [ ] If `WEB_CONCURRENCY > 1` or more than one instance: point
+      `RATELIMIT_STORAGE_URI` at Redis. In-memory counters are per-process, so
+      effective rate limits multiply per worker.
+- [ ] The Docker image builds green in CI (`docker-smoke` job); if you changed
+      the Dockerfile, also run `docker build -t atis .` locally once.
+
 ## Prerequisites
 
 - **Git LFS** — the classifier weights (`*.pt`) are stored via Git LFS. A plain
@@ -96,8 +139,9 @@ the service on port `8080`, provisions a PostgreSQL database, and runs one
 
 The app will be available on its default `.ondigitalocean.app` domain after the
 deployment becomes live. Log in with the `ATIS_ADMIN_EMAIL` and
-`ATIS_ADMIN_PASSWORD` values from the spec, or with the seeded demo operator:
-`operator@nha.gov.pk` / `operator123`.
+`ATIS_ADMIN_PASSWORD` values from the spec. (Demo accounts only seed in
+production when `ATIS_SEED_DEMO=1` **and** `ATIS_DEMO_PASSWORD` are set — they
+get that password, never the README ones.)
 
 Notes:
 - App Platform uses the GitHub repo as the build source. The Dockerfile can
