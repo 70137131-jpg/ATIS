@@ -70,12 +70,14 @@
             </form>
         </div>
 
-        <!-- Demo Credentials -->
+        {% if config.SHOW_DEMO_CREDENTIALS %}
+        <!-- Demo Credentials (hidden in production unless explicitly enabled) -->
         <div class="demo-box">
             <p class="demo-title">Demo credentials:</p>
 
             <p class="demo-line">Operator: <span class="demo-highlight">operator@nha.gov.pk</span> / operator123</p>
         </div>
+        {% endif %}
     </div>
 
     <script src="{{ url_for('static', filename='js/login.js') }}"></script>

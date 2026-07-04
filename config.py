@@ -85,6 +85,10 @@ class Config:
     # Behaviour flags — demo conveniences are disabled in production by default.
     SEED_DEMO_DATA = _env_bool("ATIS_SEED_DEMO", not IS_PRODUCTION)
     ENABLE_DEMO_LOGIN_ALIASES = _env_bool("ATIS_DEMO_ALIASES", not IS_PRODUCTION)
+    # The login page prints the well-known README demo credentials. Never show
+    # them on a production host (they read like a backdoor, and production demo
+    # accounts use ATIS_DEMO_PASSWORD anyway, so the printed password is wrong).
+    SHOW_DEMO_CREDENTIALS = _env_bool("ATIS_SHOW_DEMO_CREDENTIALS", not IS_PRODUCTION)
 
     @classmethod
     def validate(cls):

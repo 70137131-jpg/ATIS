@@ -58,6 +58,23 @@ def test_login_page_renders(client):
     assert b"password" in resp.data.lower()
 
 
+def test_login_page_shows_demo_credentials_in_development(client, app):
+    app.config["SHOW_DEMO_CREDENTIALS"] = True
+    resp = client.get("/login")
+    assert b"operator123" in resp.data
+
+
+def test_login_page_hides_demo_credentials_when_disabled(client, app):
+    """Production defaults SHOW_DEMO_CREDENTIALS off — no README passwords on a public host."""
+    app.config["SHOW_DEMO_CREDENTIALS"] = False
+    try:
+        resp = client.get("/login")
+        assert b"operator123" not in resp.data
+        assert b"Demo credentials" not in resp.data
+    finally:
+        app.config["SHOW_DEMO_CREDENTIALS"] = True
+
+
 def test_valid_login_grants_access(client):
     resp = client.post(
         "/login",
