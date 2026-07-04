@@ -343,6 +343,11 @@ body.sidebar-collapsed .sidebar-collapse svg {
     background: var(--bg);
 }
 
+.topbar-icon-btn.is-muted {
+    color: var(--red);
+    background: rgba(239, 68, 68, 0.08);
+}
+
 .topbar-icon-btn[aria-label="Sign out"]:hover {
     background: rgba(239, 68, 68, 0.08);
     /* Red tint on hover */

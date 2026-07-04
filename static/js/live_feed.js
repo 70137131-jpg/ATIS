@@ -41,6 +41,9 @@
     var stream = null;
     var loopTimer = null;
     var analysing = false;
+    var lastSoundStatus = "";
+    var lastUnsafeSoundAt = 0;
+    var UNSAFE_SOUND_COOLDOWN = 8000;
 
     function clearFrameBoxes() {
         if (!boxCanvas) return;
@@ -255,6 +258,7 @@
 
     function renderResult(data) {
         var status = data.status || "";
+        var now = Date.now();
         badge.hidden = false;
         badge.dataset.status = status;
         var conf = (typeof data.confidence === "number") ? data.confidence + "%" : "";
@@ -268,6 +272,17 @@
         if (resConfidence) resConfidence.textContent = isNotTyre ? "—" : (conf || "—");
         if (resDefects) resDefects.textContent = (data.defects && data.defects.length) ? data.defects.join(", ") : "None";
         drawFrameBoxes(data.boxes || data.bounding_boxes || data.detections || []);
+
+        if (
+            status === "unsafe" &&
+            !isNotTyre &&
+            window.ATISAlertSound &&
+            (lastSoundStatus !== "unsafe" || now - lastUnsafeSoundAt > UNSAFE_SOUND_COOLDOWN)
+        ) {
+            window.ATISAlertSound.play("critical");
+            lastUnsafeSoundAt = now;
+        }
+        lastSoundStatus = status;
     }
 
     function scheduleAnalyze() {
