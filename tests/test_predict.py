@@ -537,3 +537,47 @@ def test_predict_rejects_non_image(auth_client, app, monkeypatch, tmp_path):
     # Bad upload should not create an inspection row.
     with app.app_context():
         assert Inspection.query.count() == 0
+
+
+def test_predict_removes_upload_when_inference_fails(auth_client, app, monkeypatch, tmp_path):
+    """A failed inference must not leave the saved upload behind on disk."""
+    auth_client.application.config["UPLOAD_FOLDER"] = str(tmp_path)
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("model exploded")
+
+    monkeypatch.setattr(inspection_routes, "classify_tyre_image", _boom)
+    resp = auth_client.post(
+        "/predict",
+        data={"image": (make_jpeg(), "tyre.jpg"), "location": "Test Gate"},
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302  # redirected back to the form with a flash
+    assert list(tmp_path.iterdir()) == []
+    with app.app_context():
+        assert Inspection.query.count() == 0
+
+
+def test_predict_removes_upload_when_storage_fails(auth_client, app, monkeypatch, tmp_path):
+    """A failed image-storage backend must not leave the saved upload behind."""
+    auth_client.application.config["UPLOAD_FOLDER"] = str(tmp_path)
+    monkeypatch.setattr(
+        inspection_routes, "classify_tyre_image",
+        lambda *_a, **_k: _fake_prediction("safe", []),
+    )
+
+    def _storage_down(*_a, **_k):
+        raise RuntimeError("bucket unavailable")
+
+    monkeypatch.setattr(inspection_routes, "store_image", _storage_down)
+    resp = auth_client.post(
+        "/predict",
+        data={"image": (make_jpeg(), "tyre.jpg"), "location": "Test Gate"},
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert list(tmp_path.iterdir()) == []
+    with app.app_context():
+        assert Inspection.query.count() == 0

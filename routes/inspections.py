@@ -76,6 +76,14 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def _discard_upload(save_path):
+    """Remove a saved upload that will not be persisted (failure cleanup)."""
+    try:
+        os.remove(save_path)
+    except OSError:
+        pass
+
+
 def _validate_saved_image(save_path):
     try:
         with Image.open(save_path) as probe:
@@ -537,7 +545,7 @@ def predict():
 
     validation_error = _validate_saved_image(save_path)
     if validation_error:
-        os.remove(save_path)
+        _discard_upload(save_path)
         return form_error(validation_error)
 
     image_rel_path = f"uploads/{unique_name}"
@@ -580,6 +588,7 @@ def predict():
         inference_ms = int(round((time.perf_counter() - started_at) * 1000))
     except Exception as exc:  # noqa: BLE001
         current_app.logger.error("ATIS inference error: %s", exc)
+        _discard_upload(save_path)
         flash("AI model inference failed. Please verify dependencies and model weights.", "error")
         return redirect(url_for("new_inspection"))
 
@@ -598,6 +607,7 @@ def predict():
             stored_image = store_image(image_bytes, filename=unique_name, mime=image_mime)
         except Exception as exc:  # noqa: BLE001
             current_app.logger.error("Image storage failed: %s", exc)
+            _discard_upload(save_path)
             flash("Could not persist uploaded image. Please try again.", "error")
             return redirect(url_for("new_inspection"))
 
