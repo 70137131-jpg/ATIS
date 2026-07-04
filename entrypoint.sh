@@ -14,14 +14,17 @@ if [ "$ATIS_SEED_DEMO" = "1" ] || [ "$ATIS_SEED_DEMO" = "true" ]; then
     flask --app app seed-demo-users
 fi
 
-# Create a default admin if ATIS_ADMIN_EMAIL and ATIS_ADMIN_PASSWORD are set and
-# no admin exists yet.  This lets the first deploy be fully automated.
+# Create (or update) the default admin when ATIS_ADMIN_EMAIL and
+# ATIS_ADMIN_PASSWORD are set.  This lets the first deploy be fully automated.
+# create-admin is idempotent (an existing user gets its password updated), so a
+# failure here means the admin account is genuinely broken — abort the boot
+# (set -e) instead of serving an app that may have no usable admin login.
 if [ -n "$ATIS_ADMIN_EMAIL" ] && [ -n "$ATIS_ADMIN_PASSWORD" ]; then
     echo "==> Ensuring admin user exists …"
     flask --app app create-admin \
         --email "$ATIS_ADMIN_EMAIL" \
         --password "$ATIS_ADMIN_PASSWORD" \
-        --role Admin 2>/dev/null || true
+        --role Admin
 fi
 
 echo "==> Starting gunicorn …"
