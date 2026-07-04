@@ -4,7 +4,10 @@
   "model": {
     "name": "ATIS tire-safety classifier",
     "task": "image classification",
-    "classes": ["normal", "cracked"],
+    "classes": [
+      "normal",
+      "cracked"
+    ],
     "base_model": "yolo11n-cls.pt",
     "framework": "Ultralytics YOLO classification",
     "input_size": 224,
@@ -12,10 +15,6 @@
       "best": {
         "path": "runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt",
         "sha256": "8d27d1de6823436fa29ff5c3082276b96d9dc37eee5e3af5ac1f3c8e8bfba5e0"
-      },
-      "last": {
-        "path": "runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weights/last.pt",
-        "sha256": "e4f637e9ca18518f5d949a72dd0bcc18e0784c346cd1a089a55d94e5d81b3585"
       }
     }
   },
@@ -33,10 +32,24 @@
     "device_recorded": "0",
     "dataset_path_recorded": "E:\\ATIS\\ATIS_Dataset",
     "dataset_counts_from_DATA_HANDOFF": {
-      "train": {"cracked": 705, "normal": 675, "total": 1380},
-      "val": {"cracked": 151, "normal": 144, "total": 295},
-      "test": {"cracked": 152, "normal": 146, "total": 298},
-      "all": {"total": 1973}
+      "train": {
+        "cracked": 705,
+        "normal": 675,
+        "total": 1380
+      },
+      "val": {
+        "cracked": 151,
+        "normal": 144,
+        "total": 295
+      },
+      "test": {
+        "cracked": 152,
+        "normal": 146,
+        "total": 298
+      },
+      "all": {
+        "total": 1973
+      }
     },
     "known_sources_from_DATA_HANDOFF": [
       "Kaggle jehanbhathena/tire-texture-image-recognition via local Tire Textures",
@@ -67,15 +80,18 @@
     }
   },
   "held_out_test_metrics": {
-    "status": "not_present_in_repo_artifacts",
-    "required_command": "python3 evaluate_model.py",
-    "note": "Do not treat training validation accuracy as a held-out production metric. Re-run evaluate_model.py after restoring ATIS_Dataset/test to populate test recall, false-flag rate, and threshold sweep results."
+    "status": "recorded",
+    "evaluated_on": "2026-07-04",
+    "command": "python3 evaluate_model.py",
+    "dataset": "ATIS_Dataset/test (152 cracked / 146 normal), threshold swept on ATIS_Dataset/val",
+    "results": "see test_metrics",
+    "note": "Production default ATIS_CONF_THRESHOLD=0.60 is above the minimum qualifying sweep threshold (0.50), i.e. at least as defect-catching. These are curated-dataset metrics; field validation on target checkpoint cameras is still required (see known_limitations)."
   },
   "inference_policy": {
     "production_path": "classifier_plus_heuristic_localizer",
     "safe_decision": "safe only when predicted class is normal and top-1 confidence is greater than or equal to ATIS_CONF_THRESHOLD",
     "unsafe_decision": "cracked/crack/cracking predictions are unsafe at any confidence; low-confidence normal is unsafe for manual review",
-    "default_ATIS_CONF_THRESHOLD": 0.60,
+    "default_ATIS_CONF_THRESHOLD": 0.6,
     "default_ATIS_OBJECT_CONF_THRESHOLD": 0.35,
     "tyre_gate_default": true,
     "localizer_default": true
@@ -106,5 +122,33 @@
     "The model only distinguishes normal vs cracked tyres; bulge, puncture, flat spot, inflation, and tread-depth classes are out of scope.",
     "Night and low-light operation requires controlled lighting or new representative data.",
     "The non-tyre gate is best-effort and should not be treated as a certified tire detector."
-  ]
+  ],
+  "test_metrics": {
+    "accuracy": 0.9899328859060402,
+    "per_class": {
+      "normal": {
+        "precision": 0.993103448275862,
+        "recall": 0.9863013698630136,
+        "f1": 0.9896907216494845,
+        "support": 146
+      },
+      "cracked": {
+        "precision": 0.9869281045751634,
+        "recall": 0.993421052631579,
+        "f1": 0.9901639344262295,
+        "support": 152
+      }
+    },
+    "safety_argmax": {
+      "missed_defect_rate": 0.006578947368421018,
+      "good_flagged_rate": 0.013698630136986356
+    },
+    "chosen_threshold": 0.5,
+    "test_at_threshold": {
+      "threshold": 0.5,
+      "cracked_recall": 0.993421052631579,
+      "normal_recall": 0.9863013698630136,
+      "normal_false_flag": 0.013698630136986356
+    }
+  }
 }

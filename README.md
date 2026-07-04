@@ -248,6 +248,13 @@ does not currently load detector weights or claim multi-defect detection. Do not
 advertise `bulge`, `flat_spot`, or per-defect mAP metrics until the inference
 path has been switched to a trained detector and evaluated honestly.
 
+**Held-out test metrics** (recorded 2026-07-04 via `evaluate_model.py` on the
+298-image test split; full numbers in `model_card.json` → `test_metrics`):
+top-1 accuracy `99.0%`, cracked recall `99.3%` (missed-defect rate `0.7%`),
+false-flag rate on good tyres `1.4%`. These are curated-dataset numbers — they
+do **not** yet demonstrate performance on live checkpoint cameras (lighting,
+blur, dirt, angle); see the go-live checklist in `DEPLOY.md`.
+
 Threshold calibration and the current classifier-vs-detector decision are
 documented in `docs/model_threshold_calibration.md`.
 

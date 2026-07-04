@@ -41,16 +41,27 @@ This avoids waving through low-confidence normal predictions.
 
 ## Current Calibration Status
 
-The training run reached high validation accuracy in `results.csv`:
+**Held-out test evaluation recorded 2026-07-04** (`evaluate_model.py`, test split
+152 cracked / 146 normal, threshold swept on the val split; merged into
+`model_card.json` under `test_metrics`):
 
-- epoch 95 best top-1 validation accuracy: `0.99197`
-- epoch 92 best validation loss: `0.03143`
-- epoch 100 final top-1 validation accuracy: `0.98555`
+- test top-1 accuracy (argmax): `99.0%` (confusion: 1 cracked missed, 2 normal flagged)
+- cracked recall: `99.3%` → missed-defect rate `0.7%`
+- normal recall: `98.6%` → false-flag rate `1.4%`
+- threshold sweep: the smallest cutoff meeting the `>= 95%` cracked-recall target
+  on val is `0.50`; at that point test cracked recall is `99.3%` and false-flag
+  rate `1.4%`.
 
-Those are training validation artifacts, not a substitute for held-out product
-calibration. The current repo does not include a fresh `evaluate_model.py` output
-merged into the model card, so keep the production threshold at `0.60` until the
-held-out test split is restored and evaluated.
+The production default `ATIS_CONF_THRESHOLD=0.60` sits **above** the minimum
+qualifying cutoff, so it is at least as defect-catching — keep `0.60`.
+
+Context from training (`results.csv`): epoch 95 best top-1 validation accuracy
+`0.99197`; epoch 100 final `0.98555`.
+
+These are curated-dataset numbers (largely controlled/web imagery). They are
+necessary but not sufficient for production: field validation on the target
+checkpoint cameras (day/night, wet/dirty tyres, blur, glare, partial frames,
+non-tyre inputs) is still required — see the go-live checklist in `DEPLOY.md`.
 
 ## Calibration Runbook
 
