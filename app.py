@@ -12,6 +12,7 @@ from pathlib import Path
 
 import click
 from sqlalchemy import inspect as inspect_database
+from sqlalchemy import text as sql_text
 from flask import (
     Flask,
     current_app,
@@ -333,9 +334,6 @@ def register_cli(flask_app):
         """
         inspector = inspect_database(db.engine)
         tables = set(inspector.get_table_names())
-        if "alembic_version" in tables:
-            click.echo("Alembic version table already exists; no stamp needed.")
-            return
         if "users" not in tables:
             click.echo("No legacy users table found; fresh migrations can run normally.")
             return
@@ -457,7 +455,9 @@ def register_cli(flask_app):
         ]
 
         revision = None
+        revision_positions = {}
         for candidate, schema_matches in revision_checks:
+            revision_positions[candidate] = len(revision_positions)
             if not schema_matches():
                 break
             revision = candidate
@@ -466,8 +466,33 @@ def register_cli(flask_app):
             click.echo("Legacy users table found, but required base tables are missing.")
             raise click.ClickException("Cannot determine a safe Alembic stamp revision.")
 
+        current_revision = None
+        if "alembic_version" in tables:
+            current_revision = db.session.execute(
+                sql_text("SELECT version_num FROM alembic_version LIMIT 1")
+            ).scalar()
+
+        if current_revision:
+            current_position = revision_positions.get(current_revision)
+            detected_position = revision_positions[revision]
+            if current_position is None:
+                click.echo(
+                    f"Alembic version table already points at {current_revision}; "
+                    "no automatic legacy stamp repair was attempted."
+                )
+                return
+            if current_position >= detected_position:
+                click.echo(
+                    f"Alembic version table already points at {current_revision}; "
+                    "no stamp needed."
+                )
+                return
+
         stamp_migration(revision=revision)
-        click.echo(f"Stamped legacy database at {revision}.")
+        if current_revision:
+            click.echo(f"Advanced stale Alembic stamp from {current_revision} to {revision}.")
+        else:
+            click.echo(f"Stamped legacy database at {revision}.")
 
     @flask_app.cli.command("create-admin")
     @click.option("--email", prompt=True, help="Login email for the account.")
