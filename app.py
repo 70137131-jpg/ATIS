@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 import click
+from sqlalchemy import inspect as inspect_database
 from flask import (
     Flask,
     current_app,
@@ -61,10 +62,14 @@ except ImportError:
 
 try:
     from flask_migrate import Migrate
+    from flask_migrate import stamp as stamp_migration
 except ImportError:
     class Migrate:
         def __init__(self, *args, **kwargs):
             pass
+
+    def stamp_migration(*args, **kwargs):
+        raise RuntimeError("Flask-Migrate is required to stamp database revisions.")
 
 
 load_dotenv()
@@ -317,6 +322,27 @@ def register_request_hooks(flask_app):
 
 
 def register_cli(flask_app):
+    @flask_app.cli.command("stamp-legacy-schema")
+    def stamp_legacy_schema():
+        """Stamp an old create_all database so Alembic can upgrade it.
+
+        Early deployments created tables directly before Alembic tracked them.
+        Those databases have application tables such as users, but no
+        alembic_version row. Stamping them at revision 0001 lets the normal
+        migration chain run 0002+ without trying to recreate users.
+        """
+        inspector = inspect_database(db.engine)
+        tables = set(inspector.get_table_names())
+        if "alembic_version" in tables:
+            click.echo("Alembic version table already exists; no stamp needed.")
+            return
+        if "users" not in tables:
+            click.echo("No legacy users table found; fresh migrations can run normally.")
+            return
+
+        stamp_migration(revision="0001_initial_postgresql_schema")
+        click.echo("Stamped legacy database at 0001_initial_postgresql_schema.")
+
     @flask_app.cli.command("create-admin")
     @click.option("--email", prompt=True, help="Login email for the account.")
     @click.option(

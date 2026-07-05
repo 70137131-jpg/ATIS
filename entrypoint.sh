@@ -7,6 +7,7 @@
 set -e
 
 echo "==> Running database migrations …"
+flask --app app stamp-legacy-schema
 flask --app app db upgrade
 
 if [ "$ATIS_SEED_DEMO" = "1" ] || [ "$ATIS_SEED_DEMO" = "true" ]; then
