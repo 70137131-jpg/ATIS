@@ -70,19 +70,17 @@ def upgrade():
             normalized = _normalized_name(name)
             defect_type_id = defect_type_ids.get(normalized)
             if defect_type_id is None:
-                result = connection.execute(
+                connection.execute(
                     sa.text(
                         "INSERT INTO defect_types (name, normalized_name, created_at) "
                         "VALUES (:name, :normalized_name, CURRENT_TIMESTAMP)"
                     ),
                     {"name": name[:80], "normalized_name": normalized[:80]},
                 )
-                defect_type_id = result.lastrowid
-                if defect_type_id is None:
-                    defect_type_id = connection.execute(
-                        sa.text("SELECT id FROM defect_types WHERE normalized_name = :normalized_name"),
-                        {"normalized_name": normalized[:80]},
-                    ).scalar_one()
+                defect_type_id = connection.execute(
+                    sa.text("SELECT id FROM defect_types WHERE normalized_name = :normalized_name"),
+                    {"normalized_name": normalized[:80]},
+                ).scalar_one()
                 defect_type_ids[normalized] = defect_type_id
 
             connection.execute(
