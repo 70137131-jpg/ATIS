@@ -83,11 +83,12 @@ def upgrade():
                 result = connection.execute(
                     sa.text(
                         "INSERT INTO locations (name, normalized_name, is_active, created_at) "
-                        "VALUES (:name, :normalized_name, 1, CURRENT_TIMESTAMP)"
+                        "VALUES (:name, :normalized_name, :is_active, CURRENT_TIMESTAMP)"
                     ),
                     {
                         "name": (row["location"] or "Unknown Location")[:200],
                         "normalized_name": normalized_location[:200],
+                        "is_active": True,
                     },
                 )
                 location_id = result.lastrowid
@@ -110,12 +111,13 @@ def upgrade():
                 result = connection.execute(
                     sa.text(
                         "INSERT INTO cameras (name, normalized_name, location_id, is_active, created_at) "
-                        "VALUES (:name, :normalized_name, :location_id, 1, CURRENT_TIMESTAMP)"
+                        "VALUES (:name, :normalized_name, :location_id, :is_active, CURRENT_TIMESTAMP)"
                     ),
                     {
                         "name": (row["camera"] or "")[:20],
                         "normalized_name": normalized_camera[:20],
                         "location_id": location_id,
+                        "is_active": True,
                     },
                 )
                 camera_id = result.lastrowid
