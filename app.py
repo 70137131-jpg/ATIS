@@ -328,8 +328,8 @@ def register_cli(flask_app):
 
         Early deployments created tables directly before Alembic tracked them.
         Those databases have application tables such as users, but no
-        alembic_version row. Stamping them at revision 0001 lets the normal
-        migration chain run 0002+ without trying to recreate users.
+        alembic_version row. Detect the newest represented migration so the
+        normal chain can continue without replaying columns that already exist.
         """
         inspector = inspect_database(db.engine)
         tables = set(inspector.get_table_names())
@@ -340,8 +340,134 @@ def register_cli(flask_app):
             click.echo("No legacy users table found; fresh migrations can run normally.")
             return
 
-        stamp_migration(revision="0001_initial_postgresql_schema")
-        click.echo("Stamped legacy database at 0001_initial_postgresql_schema.")
+        column_cache = {}
+
+        def columns_for(table_name):
+            if table_name not in tables:
+                return set()
+            if table_name not in column_cache:
+                column_cache[table_name] = {
+                    column["name"] for column in inspector.get_columns(table_name)
+                }
+            return column_cache[table_name]
+
+        def has_tables(*table_names):
+            return all(table_name in tables for table_name in table_names)
+
+        def has_columns(table_name, *column_names):
+            columns = columns_for(table_name)
+            return all(column_name in columns for column_name in column_names)
+
+        # 0005 only creates indexes. A legacy create_all schema can already have
+        # later columns without every Alembic-named index, so the stamp target is
+        # based on structural tables/columns to avoid duplicate-column failures.
+        revision_checks = [
+            (
+                "0001_initial_postgresql_schema",
+                lambda: has_tables("users", "inspections", "alerts"),
+            ),
+            ("0002_password_hash", lambda: has_columns("users", "password_hash")),
+            (
+                "0003_add_image_blob_columns",
+                lambda: has_columns("inspections", "image_data", "image_mime"),
+            ),
+            ("0004_add_boxes_column", lambda: has_columns("inspections", "boxes")),
+            ("0005_add_query_indexes", lambda: True),
+            (
+                "0006_add_alert_audit_fields",
+                lambda: has_columns(
+                    "alerts",
+                    "acknowledged_by_id",
+                    "acknowledged_at",
+                    "resolved_by_id",
+                    "resolved_at",
+                ),
+            ),
+            (
+                "0007_add_image_storage_metadata",
+                lambda: has_columns(
+                    "inspections",
+                    "image_storage",
+                    "image_object_key",
+                    "image_size",
+                ),
+            ),
+            (
+                "0008_audit_checksum",
+                lambda: has_columns("inspections", "created_by_id", "image_checksum"),
+            ),
+            ("0009_add_user_active_flag", lambda: has_columns("users", "is_active")),
+            ("0010_add_audit_events", lambda: has_tables("audit_events")),
+            (
+                "0011_review_workflow",
+                lambda: has_columns(
+                    "inspections",
+                    "review_status",
+                    "review_notes",
+                    "reviewer_id",
+                    "reviewed_at",
+                    "correction_label",
+                ),
+            ),
+            (
+                "0012_normalize_defects",
+                lambda: has_tables("defect_types", "inspection_defects"),
+            ),
+            (
+                "0013_enrich_alert_workflow",
+                lambda: has_tables("alert_comments")
+                and has_columns(
+                    "alerts",
+                    "priority",
+                    "severity",
+                    "assigned_user_id",
+                    "assigned_team",
+                    "sla_due_at",
+                    "escalation_status",
+                    "resolution_category",
+                ),
+            ),
+            (
+                "0014_model_metadata",
+                lambda: has_columns(
+                    "inspections",
+                    "predicted_class",
+                    "model_path",
+                    "model_version",
+                    "model_threshold",
+                    "low_confidence",
+                    "inference_ms",
+                ),
+            ),
+            (
+                "0015_locations_cameras",
+                lambda: has_tables("locations", "cameras")
+                and has_columns("inspections", "location_id", "camera_id"),
+            ),
+            ("0016_add_saved_filters", lambda: has_tables("saved_filters")),
+            (
+                "0017_add_anpr_fields",
+                lambda: has_columns(
+                    "inspections",
+                    "plate_source",
+                    "plate_confidence",
+                    "plate_raw_text",
+                ),
+            ),
+        ]
+
+        revision = None
+        for candidate, schema_matches in revision_checks:
+            if not schema_matches():
+                break
+            revision = candidate
+
+        if revision is None:
+            click.echo("Legacy users table found, but required base tables are missing.")
+            raise click.ClickException("Cannot determine a safe Alembic stamp revision.")
+
+        stamp_migration(revision=revision)
+        click.echo(f"Stamped legacy database at {revision}.")
 
     @flask_app.cli.command("create-admin")
     @click.option("--email", prompt=True, help="Login email for the account.")
