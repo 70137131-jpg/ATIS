@@ -18,10 +18,14 @@ WORKDIR /app
 # Install the CPU-only Torch build first so the multi-GB CUDA wheels are never
 # pulled (keeps the image far smaller). requirements.txt then sees torch and
 # torchvision already satisfied and skips them. constraints.txt pins the exact
-# versions so builds are reproducible.
+# versions so builds are reproducible. PyPI stays available as the extra index
+# because torch's transitive deps (filelock, sympy, ...) are constrained to
+# versions the PyTorch index doesn't host; the +cpu torch/torchvision builds
+# still win the resolve because a local version sorts above the plain release.
 COPY requirements.txt constraints.txt ./
 RUN pip install --no-cache-dir -c constraints.txt torch torchvision \
-    --index-url https://download.pytorch.org/whl/cpu
+    --index-url https://download.pytorch.org/whl/cpu \
+    --extra-index-url https://pypi.org/simple
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application. .dockerignore keeps the multi-GB dataset and git
