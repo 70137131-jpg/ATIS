@@ -80,7 +80,7 @@ def upgrade():
         if normalized_location:
             location_id = location_ids.get(normalized_location)
             if location_id is None:
-                result = connection.execute(
+                connection.execute(
                     sa.text(
                         "INSERT INTO locations (name, normalized_name, is_active, created_at) "
                         "VALUES (:name, :normalized_name, :is_active, CURRENT_TIMESTAMP)"
@@ -91,12 +91,10 @@ def upgrade():
                         "is_active": True,
                     },
                 )
-                location_id = result.lastrowid
-                if location_id is None:
-                    location_id = connection.execute(
-                        sa.text("SELECT id FROM locations WHERE normalized_name = :normalized_name"),
-                        {"normalized_name": normalized_location[:200]},
-                    ).scalar_one()
+                location_id = connection.execute(
+                    sa.text("SELECT id FROM locations WHERE normalized_name = :normalized_name"),
+                    {"normalized_name": normalized_location[:200]},
+                ).scalar_one()
                 location_ids[normalized_location] = location_id
             connection.execute(
                 sa.text("UPDATE inspections SET location_id = :location_id WHERE id = :inspection_id"),
@@ -108,7 +106,7 @@ def upgrade():
             camera_key = (normalized_camera[:20], location_id)
             camera_id = camera_ids.get(camera_key)
             if camera_id is None:
-                result = connection.execute(
+                connection.execute(
                     sa.text(
                         "INSERT INTO cameras (name, normalized_name, location_id, is_active, created_at) "
                         "VALUES (:name, :normalized_name, :location_id, :is_active, CURRENT_TIMESTAMP)"
@@ -120,15 +118,13 @@ def upgrade():
                         "is_active": True,
                     },
                 )
-                camera_id = result.lastrowid
-                if camera_id is None:
-                    camera_id = connection.execute(
-                        sa.text(
-                            "SELECT id FROM cameras WHERE normalized_name = :normalized_name "
-                            "AND ((location_id IS NULL AND :location_id IS NULL) OR location_id = :location_id)"
-                        ),
-                        {"normalized_name": normalized_camera[:20], "location_id": location_id},
-                    ).scalar_one()
+                camera_id = connection.execute(
+                    sa.text(
+                        "SELECT id FROM cameras WHERE normalized_name = :normalized_name "
+                        "AND ((location_id IS NULL AND :location_id IS NULL) OR location_id = :location_id)"
+                    ),
+                    {"normalized_name": normalized_camera[:20], "location_id": location_id},
+                ).scalar_one()
                 camera_ids[camera_key] = camera_id
             connection.execute(
                 sa.text("UPDATE inspections SET camera_id = :camera_id WHERE id = :inspection_id"),
