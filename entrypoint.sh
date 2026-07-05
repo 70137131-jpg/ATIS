@@ -7,12 +7,12 @@
 set -e
 
 echo "==> Running database migrations …"
-flask --app app stamp-legacy-schema
-flask --app app db upgrade
+ATIS_WARMUP=0 flask --app app stamp-legacy-schema
+ATIS_WARMUP=0 flask --app app db upgrade
 
 if [ "$ATIS_SEED_DEMO" = "1" ] || [ "$ATIS_SEED_DEMO" = "true" ]; then
     echo "==> Ensuring demo users exist …"
-    flask --app app seed-demo-users
+    ATIS_WARMUP=0 flask --app app seed-demo-users
 fi
 
 # Create (or update) the default admin when ATIS_ADMIN_EMAIL and
@@ -22,7 +22,7 @@ fi
 # (set -e) instead of serving an app that may have no usable admin login.
 if [ -n "$ATIS_ADMIN_EMAIL" ] && [ -n "$ATIS_ADMIN_PASSWORD" ]; then
     echo "==> Ensuring admin user exists …"
-    flask --app app create-admin \
+    ATIS_WARMUP=0 flask --app app create-admin \
         --email "$ATIS_ADMIN_EMAIL" \
         --password "$ATIS_ADMIN_PASSWORD" \
         --role Admin
