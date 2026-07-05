@@ -1,6 +1,6 @@
 """Add inspection review workflow fields
 
-Revision ID: 0011_add_inspection_review_workflow
+Revision ID: 0011_review_workflow
 Revises: 0010_add_audit_events
 Create Date: 2026-07-03 00:00:00.000000
 """
@@ -8,7 +8,7 @@ Create Date: 2026-07-03 00:00:00.000000
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0011_add_inspection_review_workflow"
+revision = "0011_review_workflow"
 down_revision = "0010_add_audit_events"
 branch_labels = None
 depends_on = None

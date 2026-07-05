@@ -1,7 +1,7 @@
 """Normalize inspection defects
 
-Revision ID: 0012_normalize_inspection_defects
-Revises: 0011_add_inspection_review_workflow
+Revision ID: 0012_normalize_defects
+Revises: 0011_review_workflow
 Create Date: 2026-07-03 00:00:00.000000
 """
 
@@ -12,8 +12,8 @@ import re
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0012_normalize_inspection_defects"
-down_revision = "0011_add_inspection_review_workflow"
+revision = "0012_normalize_defects"
+down_revision = "0011_review_workflow"
 branch_labels = None
 depends_on = None
 

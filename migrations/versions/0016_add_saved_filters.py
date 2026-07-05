@@ -1,7 +1,7 @@
 """Add saved filters
 
 Revision ID: 0016_add_saved_filters
-Revises: 0015_add_operational_locations_cameras
+Revises: 0015_locations_cameras
 Create Date: 2026-07-03 00:00:00.000000
 """
 
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "0016_add_saved_filters"
-down_revision = "0015_add_operational_locations_cameras"
+down_revision = "0015_locations_cameras"
 branch_labels = None
 depends_on = None
 

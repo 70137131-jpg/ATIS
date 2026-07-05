@@ -1,6 +1,6 @@
 """Add inspection model metadata
 
-Revision ID: 0014_add_inspection_model_metadata
+Revision ID: 0014_model_metadata
 Revises: 0013_enrich_alert_workflow
 Create Date: 2026-07-03 00:00:00.000000
 """
@@ -8,7 +8,7 @@ Create Date: 2026-07-03 00:00:00.000000
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0014_add_inspection_model_metadata"
+revision = "0014_model_metadata"
 down_revision = "0013_enrich_alert_workflow"
 branch_labels = None
 depends_on = None

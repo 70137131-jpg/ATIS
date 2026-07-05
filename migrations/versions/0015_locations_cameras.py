@@ -1,7 +1,7 @@
 """Add operational locations and cameras
 
-Revision ID: 0015_add_operational_locations_cameras
-Revises: 0014_add_inspection_model_metadata
+Revision ID: 0015_locations_cameras
+Revises: 0014_model_metadata
 Create Date: 2026-07-03 00:00:00.000000
 """
 
@@ -12,8 +12,8 @@ import re
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0015_add_operational_locations_cameras"
-down_revision = "0014_add_inspection_model_metadata"
+revision = "0015_locations_cameras"
+down_revision = "0014_model_metadata"
 branch_labels = None
 depends_on = None
 

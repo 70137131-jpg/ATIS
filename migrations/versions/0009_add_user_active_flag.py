@@ -1,7 +1,7 @@
 """Add user active flag
 
 Revision ID: 0009_add_user_active_flag
-Revises: 0008_add_inspection_audit_checksum
+Revises: 0008_audit_checksum
 Create Date: 2026-07-03 00:00:00.000000
 """
 
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "0009_add_user_active_flag"
-down_revision = "0008_add_inspection_audit_checksum"
+down_revision = "0008_audit_checksum"
 branch_labels = None
 depends_on = None
 

@@ -1,7 +1,7 @@
 """Enrich alert workflow
 
 Revision ID: 0013_enrich_alert_workflow
-Revises: 0012_normalize_inspection_defects
+Revises: 0012_normalize_defects
 Create Date: 2026-07-03 00:00:00.000000
 """
 
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "0013_enrich_alert_workflow"
-down_revision = "0012_normalize_inspection_defects"
+down_revision = "0012_normalize_defects"
 branch_labels = None
 depends_on = None
 
