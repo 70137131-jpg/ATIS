@@ -73,7 +73,7 @@ def test_user_admin_action_logs_audit_event(client, app):
 
     resp = client.post(
         "/admin/users",
-        data={"email": "audited-user@example.com", "role": "Operator", "password": "newpass123"},
+        data={"email": "audited-user@example.com", "role": "Operator", "password": "Str0ngPass!2026"},
         follow_redirects=False,
     )
 
