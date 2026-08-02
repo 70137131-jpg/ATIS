@@ -16,6 +16,16 @@ from models import db, User, Inspection, Alert
 
 def seed():
     with app.app_context():
+        # Guard: this DROPS ALL TABLES. Never let it run against production data.
+        # ATIS_ENV=production hard-blocks it; ATIS_ALLOW_SEED=1 is an explicit,
+        # deliberate override for the rare case of intentionally seeding a
+        # non-dev environment.
+        if app.config.get("IS_PRODUCTION") and os.environ.get("ATIS_ALLOW_SEED") != "1":
+            sys.exit(
+                "Refusing to seed in production: seed.py drops all tables. "
+                "Set ATIS_ALLOW_SEED=1 to override deliberately."
+            )
+
         # Drop and recreate all tables for a clean reset
         db.drop_all()
         db.create_all()

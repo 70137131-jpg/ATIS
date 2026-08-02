@@ -28,11 +28,15 @@ GENESIS_HASH = ""
 
 
 def _request_ip():
+    # Trust only request.remote_addr, never the raw X-Forwarded-For header.
+    # The leftmost XFF entry is entirely client-controlled, so parsing it here
+    # would let anyone spoof the audit-trail IP. In production the app wraps the
+    # WSGI stack in ProxyFix(x_for=1) (see app.py), which safely rewrites
+    # remote_addr to the client IP from the single trusted proxy hop. In dev
+    # there is no proxy and remote_addr is the direct peer. Either way,
+    # remote_addr is the only trustworthy source.
     if not has_request_context():
         return None
-    forwarded = request.headers.get("X-Forwarded-For", "")
-    if forwarded:
-        return forwarded.split(",", 1)[0].strip()
     return request.remote_addr
 
 
