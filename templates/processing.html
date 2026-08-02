@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Processing Inspection — NHA{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <h1 class="page-title">Analyzing Tyre</h1>
+    <p class="page-subtitle">Your inspection is being processed in the background.</p>
+</div>
+
+<div class="processing-panel" id="processing"
+     data-status-url="{{ status_url }}"
+     data-new-inspection-url="{{ new_inspection_url }}">
+    <div class="processing-spinner" aria-hidden="true"></div>
+    <p id="processing-status" role="status" aria-live="polite">
+        Running the classifier… this page updates automatically when the result is ready.
+    </p>
+    <p id="processing-actions" style="display:none;">
+        <a href="{{ new_inspection_url }}" class="btn">Back to New Inspection</a>
+    </p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/processing.js') }}"></script>
+{% endblock %}
