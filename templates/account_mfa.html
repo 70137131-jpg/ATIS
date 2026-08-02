@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}NHA - Two-Factor Authentication{% endblock %}
+{% block description %}Manage two-factor authentication for your NHA account{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_users.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <span class="official-kicker">Account</span>
+        <h1 class="page-title">Two-Factor Authentication</h1>
+        <p class="page-subtitle">Add a second factor (an authenticator app) to your sign-in</p>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="flash-stack" role="status" aria-live="polite">
+    {% for category, message in messages %}
+    <div class="flash-line flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+{% if new_recovery_codes %}
+<section class="admin-panel">
+    <h2>Save your recovery codes</h2>
+    <p>Store these somewhere safe. Each code works <strong>once</strong> if you lose your
+        authenticator. They are shown <strong>only now</strong> and cannot be retrieved later.</p>
+    <ul class="recovery-codes">
+        {% for code in new_recovery_codes %}
+        <li><code>{{ code }}</code></li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<section class="admin-panel">
+    {% if mfa_enabled %}
+    <p><strong>Status:</strong> Two-factor authentication is <strong>enabled</strong> on this account.</p>
+    <p><strong>Recovery codes remaining:</strong> {{ recovery_remaining }}</p>
+
+    <form method="POST" action="{{ url_for('account_mfa') }}" class="account-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="regenerate_recovery">
+        <label>
+            <span>Confirm your password to generate new recovery codes</span>
+            <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <button type="submit" class="btn">Regenerate recovery codes</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('account_mfa') }}" class="account-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="disable">
+        <label>
+            <span>Confirm your password to disable</span>
+            <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <button type="submit" class="btn btn-danger">Disable two-factor</button>
+    </form>
+    {% else %}
+    <p><strong>Status:</strong> Two-factor authentication is <strong>not enabled</strong>.</p>
+    <ol class="mfa-steps">
+        <li>
+            In your authenticator app (Google Authenticator, Authy, 1Password, …), add an
+            account and either scan a QR code or enter this setup key manually:
+            <div class="mfa-secret"><code>{{ setup_secret }}</code></div>
+        </li>
+        <li>
+            Or use this provisioning link / URI:
+            <div class="mfa-uri"><code>{{ provisioning_uri }}</code></div>
+        </li>
+        <li>
+            Enter the current 6-digit code to confirm and enable:
+            <form method="POST" action="{{ url_for('account_mfa') }}" class="account-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="enable">
+                <label>
+                    <span>Authentication code</span>
+                    <input type="text" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+                        autocomplete="one-time-code" placeholder="123456" required>
+                </label>
+                <button type="submit" class="btn">Enable two-factor</button>
+            </form>
+        </li>
+    </ol>
+    {% endif %}
+    <p style="margin-top:1rem;"><a href="{{ url_for('change_password') }}">Back to account</a></p>
+</section>
+{% endblock %}

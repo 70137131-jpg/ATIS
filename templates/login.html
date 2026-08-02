@@ -6,9 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="NHA — Automated Highway Inspection System Login">
     <title>NHA — Sign In</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
 </head>
@@ -31,7 +29,7 @@
 
             {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-            <div class="flash-messages">
+            <div class="flash-messages" role="status" aria-live="polite">
                 {% for category, message in messages %}
                 <div class="flash flash-{{ category }}">{{ message }}</div>
                 {% endfor %}

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="NHA — Two-Factor Verification">
+    <title>NHA — Verify</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+</head>
+
+<body>
+    <div class="login-wrapper">
+        <div class="brand">
+            <div class="brand-icon">NHA</div>
+            <h1 class="brand-name">NHA</h1>
+            <p class="brand-tagline">Two-Factor Verification</p>
+        </div>
+
+        <div class="login-card">
+            <div class="card-header">
+                <h2>Enter your code</h2>
+                <p>Open your authenticator app and enter the current 6-digit code.</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-messages" role="status" aria-live="polite">
+                {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('mfa_verify') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label for="code">Authentication code</label>
+                    <input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
+                        pattern="[0-9]*" maxlength="6" placeholder="123456" required autofocus>
+                </div>
+                <button type="submit" class="btn-signin">
+                    <span>Verify</span>
+                </button>
+            </form>
+
+            <p style="margin-top:1rem;text-align:center;">
+                <a href="{{ url_for('login') }}">Back to sign in</a>
+            </p>
+        </div>
+    </div>
+</body>
+
+</html>
