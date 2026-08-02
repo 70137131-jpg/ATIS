@@ -12,10 +12,24 @@ services:
     http_port: 8080
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-2gb
+    # Readiness gate: the platform only routes to an instance once its DB (and
+    # model, under warmup) are actually ready — not merely once the process is up.
+    health_check:
+      http_path: /readyz
+      initial_delay_seconds: 120
+      period_seconds: 15
+      failure_threshold: 3
     envs:
+      # NOTE: values marked `type: SECRET` are encrypted at rest by the platform.
+      # Prefer binding them from a secrets manager / the App Platform secret store
+      # rather than committing real values into any tracked copy of this spec.
       - key: ATIS_ENV
         value: production
         scope: RUN_TIME
+      - key: ATIS_LOG_JSON
+        value: "1"
+        scope: RUN_TIME
+        type: GENERAL
         type: GENERAL
       - key: SECRET_KEY
         value: replace-with-a-generated-secret

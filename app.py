@@ -36,6 +36,9 @@ from atis_inference import (
 )
 from config import Config
 from models import Alert, User, db
+from metrics import register_metrics
+from observability import configure_logging
+from security import register_security_headers
 from routes.alerts import register_routes as register_alert_routes
 from routes.audit import register_routes as register_audit_routes
 from routes.auth import register_routes as register_auth_routes
@@ -231,6 +234,8 @@ def create_app(config_object=Config, config_overrides=None):
             "multiplied. Point RATELIMIT_STORAGE_URI at Redis for shared limits."
         )
 
+    _warn_unsafe_production_defaults(flask_app)
+
     register_auth_routes(flask_app, limiter)
     register_alert_routes(flask_app)
     register_audit_routes(flask_app)
@@ -240,6 +245,9 @@ def create_app(config_object=Config, config_overrides=None):
     register_report_routes(flask_app)
     register_user_routes(flask_app)
 
+    configure_logging(flask_app)
+    register_security_headers(flask_app)
+    register_metrics(flask_app)
     register_health_endpoint(flask_app)
     register_context_processors(flask_app)
     register_request_hooks(flask_app)
@@ -250,6 +258,39 @@ def create_app(config_object=Config, config_overrides=None):
         warmup_model(fail_hard=flask_app.config["IS_PRODUCTION"], flask_app=flask_app)
 
     return flask_app
+
+
+def _warn_unsafe_production_defaults(flask_app):
+    """Log loud warnings when production is running on demo-grade data defaults.
+
+    None of these block boot — a demo host legitimately uses them — but on a
+    real deployment they mean data loss (ephemeral SQLite), a bloated database
+    (image bytes in Postgres), or no way to age out personal data (plates, IPs)
+    with no retention policy set. Surfacing them keeps a go-live from silently
+    inheriting demo settings.
+    """
+    if not flask_app.config["IS_PRODUCTION"]:
+        return
+
+    if flask_app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"):
+        flask_app.logger.warning(
+            "Running in production on SQLite. In a container this database is "
+            "ephemeral and single-writer; point DATABASE_URL at managed "
+            "PostgreSQL before trusting stored inspections."
+        )
+    if os.environ.get("ATIS_IMAGE_STORAGE", "db").strip().lower() in {"", "db", "database"}:
+        flask_app.logger.warning(
+            "Inspection images are stored as database blobs (demo default). This "
+            "bloats the database quickly under real volume; set "
+            "ATIS_IMAGE_STORAGE=s3 with a bucket for production."
+        )
+    if flask_app.config["RETENTION_DAYS"] <= 0 and flask_app.config["AUDIT_RETENTION_DAYS"] <= 0:
+        flask_app.logger.warning(
+            "No data-retention policy is configured (ATIS_RETENTION_DAYS and "
+            "ATIS_AUDIT_RETENTION_DAYS are both 0). Inspections store plates and "
+            "images and audit events store IP addresses — all personal data. Set "
+            "a retention window and schedule `flask atis-purge-expired`."
+        )
 
 
 def register_context_processors(flask_app):
@@ -292,7 +333,7 @@ def register_context_processors(flask_app):
         }
 
 
-PUBLIC_ENDPOINTS = {"login", "static", "healthz"}
+PUBLIC_ENDPOINTS = {"login", "mfa_verify", "static", "healthz", "readyz", "metrics"}
 
 
 def register_health_endpoint(flask_app):
@@ -306,6 +347,36 @@ def register_health_endpoint(flask_app):
         """
         return jsonify({"status": "ok"}), 200
 
+    @flask_app.get("/readyz")
+    def readyz():
+        """Readiness probe: is this instance able to serve real traffic?
+
+        Unlike /healthz, this checks the dependencies a request actually needs —
+        the database (a trivial round-trip) and, when warmup is enabled, that the
+        model weights are resolvable. Returns 503 when not ready so a load
+        balancer stops routing to an instance whose DB is down or whose
+        migrations have not run, instead of serving errors.
+        """
+        checks = {"database": False, "model": None}
+        status_code = 200
+
+        try:
+            db.session.execute(sql_text("SELECT 1"))
+            checks["database"] = True
+        except Exception as exc:  # noqa: BLE001 - report, don't crash the probe
+            checks["database"] = False
+            checks["database_error"] = str(exc)
+            status_code = 503
+
+        if env_bool("ATIS_WARMUP", False):
+            model_path = find_model_path()
+            checks["model"] = bool(model_path)
+            if not model_path:
+                status_code = 503
+
+        checks["status"] = "ok" if status_code == 200 else "unavailable"
+        return jsonify(checks), status_code
+
 
 def register_request_hooks(flask_app):
     @flask_app.before_request
@@ -316,7 +387,13 @@ def register_request_hooks(flask_app):
             return None
         user = session_user()
         if user is None:
+            # Drop any stale auth session, but preserve an in-progress MFA step
+            # (password verified, awaiting the second factor) so navigating during
+            # the flow doesn't force the password to be re-entered.
+            pending_mfa = session.get("mfa_pending_user_id")
             session.clear()
+            if pending_mfa is not None:
+                session["mfa_pending_user_id"] = pending_mfa
             return auth_failure_response()
         g.current_user = user
         return None
@@ -523,6 +600,117 @@ def register_cli(flask_app):
         """Create the demo users after migrations have created the schema."""
         ensure_demo_users()
         click.echo("Demo users are present.")
+
+    @flask_app.cli.command("atis-purge-expired")
+    @click.option(
+        "--apply",
+        "apply_changes",
+        is_flag=True,
+        default=False,
+        help="Actually delete. Without this flag the command is a dry run.",
+    )
+    @click.option("--retention-days", type=int, default=None, help="Override ATIS_RETENTION_DAYS.")
+    @click.option("--audit-retention-days", type=int, default=None, help="Override ATIS_AUDIT_RETENTION_DAYS.")
+    def atis_purge_expired(apply_changes, retention_days, audit_retention_days):
+        """Delete inspections and audit events past their retention window.
+
+        Personal data (plates, images, IP addresses) is aged out here. Runs as a
+        dry run by default; pass --apply to commit. Schedule from cron.
+        """
+        from services.retention import purge_expired
+
+        retention = current_app.config["RETENTION_DAYS"] if retention_days is None else retention_days
+        audit_retention = (
+            current_app.config["AUDIT_RETENTION_DAYS"]
+            if audit_retention_days is None
+            else audit_retention_days
+        )
+        if retention <= 0 and audit_retention <= 0:
+            click.echo(
+                "No retention window set (ATIS_RETENTION_DAYS / "
+                "ATIS_AUDIT_RETENTION_DAYS are 0). Nothing to purge."
+            )
+            return
+
+        summary = purge_expired(
+            retention_days=retention,
+            audit_retention_days=audit_retention,
+            dry_run=not apply_changes,
+        )
+        verb = "Deleted" if apply_changes else "Would delete"
+        click.echo(
+            f"{verb}: {summary['inspections_deleted']} inspection(s), "
+            f"{summary['alerts_deleted']} alert(s), "
+            f"{summary['audit_events_deleted']} audit event(s)."
+        )
+        if not apply_changes:
+            click.echo("Dry run — re-run with --apply to commit.")
+
+    @flask_app.cli.command("atis-export-plate")
+    @click.option("--plate", prompt=True, help="Plate to export all held records for.")
+    def atis_export_plate(plate):
+        """Print every record held for a plate (data-subject access request)."""
+        import json as _json
+
+        from services.retention import export_plate_data
+
+        click.echo(_json.dumps(export_plate_data(plate), indent=2))
+
+    @flask_app.cli.command("atis-erase-plate")
+    @click.option("--plate", prompt=True, help="Plate to erase all held records for.")
+    @click.option(
+        "--apply",
+        "apply_changes",
+        is_flag=True,
+        default=False,
+        help="Actually delete. Without this flag the command is a dry run.",
+    )
+    def atis_erase_plate(plate, apply_changes):
+        """Erase every inspection/image/alert held for a plate (right to erasure)."""
+        from services.retention import erase_plate_data
+
+        summary = erase_plate_data(plate, dry_run=not apply_changes)
+        verb = "Erased" if apply_changes else "Would erase"
+        click.echo(
+            f"{verb} {summary['inspections_deleted']} inspection(s) and "
+            f"{summary['alerts_deleted']} alert(s) for plate {summary['plate']}."
+        )
+        if not apply_changes:
+            click.echo("Dry run — re-run with --apply to commit.")
+
+    @flask_app.cli.command("atis-model-monitor")
+    @click.option("--window-days", type=int, default=7, show_default=True)
+    @click.option(
+        "--strict",
+        is_flag=True,
+        default=False,
+        help="Exit non-zero when a safety threshold is breached (for cron alerting).",
+    )
+    def atis_model_monitor(window_days, strict):
+        """Report live model behaviour and drift from stored inspections."""
+        import json as _json
+
+        from services.model_monitoring import compute_monitoring_metrics, evaluate_health
+
+        metrics = compute_monitoring_metrics(window_days=window_days)
+        health = evaluate_health(metrics)
+        click.echo(_json.dumps({"metrics": metrics, "health": health}, indent=2))
+        if strict and not health["ok"]:
+            raise click.ClickException("; ".join(health["breaches"]))
+
+    @flask_app.cli.command("atis-verify-audit")
+    def atis_verify_audit():
+        """Verify the audit-log hash chain and report the first tampered row."""
+        import json as _json
+
+        from services.audit import verify_audit_chain
+
+        report = verify_audit_chain()
+        click.echo(_json.dumps(report, indent=2))
+        if not report["ok"]:
+            raise click.ClickException(
+                f"Audit chain broken at event #{report['first_broken_id']}: {report['reason']}"
+            )
 
 
 def register_error_handlers(flask_app):

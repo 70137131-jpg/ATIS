@@ -1,0 +1,27 @@
+version: 2
+updates:
+  # Python runtime + dev dependencies. Grouped so a wave of patch bumps is one
+  # PR, not dozens. Security updates always open their own PR regardless.
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      python-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Keep the GitHub Actions used in CI patched (pinned action versions rot too).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # Base image for the container.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly

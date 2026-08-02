@@ -40,7 +40,9 @@ jobs:
       - name: Import and route smoke test
         run: flask --app app routes
       - name: Run pytest with coverage
-        run: python -m pytest --cov=. --cov-report=term
+        # Fail the build if coverage regresses below the floor so the safety net
+        # cannot silently erode. Raise the floor as coverage improves.
+        run: python -m pytest --cov=. --cov-report=term --cov-fail-under=68
 
   migration-check:
     name: Migration check
@@ -71,6 +73,12 @@ jobs:
         run: flask --app app db upgrade
       - name: Verify current migration head
         run: flask --app app db current
+      - name: Downgrade to base and re-upgrade (rollback round-trip)
+        # Proves every migration's downgrade() actually works, so a bad deploy
+        # can be rolled back instead of being a one-way door.
+        run: |
+          flask --app app db downgrade base
+          flask --app app db upgrade
 
   migration-check-postgres:
     name: Migration check (PostgreSQL)
@@ -116,6 +124,22 @@ jobs:
       - name: Verify current migration head
         run: flask --app app db current
 
+  dependency-audit:
+    name: Dependency vulnerability audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+      - name: Audit pinned dependencies for known CVEs
+        # Audits the fully-pinned constraints file. Does not fail the build yet
+        # (report-only) so a newly-disclosed CVE surfaces without blocking every
+        # unrelated PR; flip `|| true` off once the queue is triaged.
+        run: pip-audit -r constraints.txt --strict || true
+
   docker-smoke:
     name: Docker build smoke
     runs-on: ubuntu-latest
@@ -125,3 +149,12 @@ jobs:
           lfs: true
       - name: Build Docker image
         run: docker build --pull -t atis-smoke:${{ github.sha }} .
+      - name: Scan image for OS/library vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: atis-smoke:${{ github.sha }}
+          format: table
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          exit-code: "0"   # report-only for now; set to "1" to enforce

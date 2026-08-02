@@ -35,6 +35,18 @@ class User(db.Model):
     role = db.Column(db.String(20), nullable=False, default="Operator")
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    # Login-security fields (see services/login_security.py).
+    failed_login_count = db.Column(db.Integer, nullable=False, default=0)
+    locked_until = db.Column(db.DateTime, nullable=True)
+    last_login_at = db.Column(db.DateTime, nullable=True)
+    # Bumping session_epoch invalidates all of this user's existing signed-cookie
+    # sessions (logout-everywhere / forced re-auth after a password change).
+    session_epoch = db.Column(db.Integer, nullable=False, default=0)
+    # Optional TOTP two-factor auth (see services/totp.py).
+    mfa_secret = db.Column(db.String(64), nullable=True)
+    mfa_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    # JSON list of hashed single-use recovery codes (see services/recovery_codes.py).
+    mfa_recovery_codes = db.Column(db.Text, nullable=True)
 
     def set_password(self, raw_password):
         """Hash and store the given plain-text password."""
@@ -226,6 +238,52 @@ class InspectionDefect(db.Model):
         return f"<InspectionDefect {self.inspection_id} {name}>"
 
 
+class InferenceJob(db.Model):
+    """A background (async) inference request.
+
+    When ATIS_ASYNC_INFERENCE is on, /predict saves the upload, records a job
+    here, and returns a job id immediately; a worker thread runs the slow model
+    inference and persists the resulting Inspection, updating this row's status.
+    """
+    __tablename__ = "inference_jobs"
+
+    # UUID hex primary key so job URLs aren't sequentially enumerable.
+    id = db.Column(db.String(32), primary_key=True)
+    status = db.Column(db.String(20), nullable=False, default="queued", index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    started_at = db.Column(db.DateTime, nullable=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    # Captured inputs the worker needs.
+    image_path = db.Column(db.String(500), nullable=True)
+    unique_name = db.Column(db.String(120), nullable=True)
+    ext = db.Column(db.String(10), nullable=True)
+    image_rel_path = db.Column(db.String(300), nullable=True)
+    plate = db.Column(db.String(20), nullable=True)
+    location = db.Column(db.String(200), nullable=True)
+    camera = db.Column(db.String(20), nullable=True)
+    # Outputs.
+    inspection_id = db.Column(db.Integer, db.ForeignKey("inspections.id"), nullable=True)
+    result = db.Column(db.Text, nullable=True)
+    error = db.Column(db.Text, nullable=True)
+
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
+    inspection = db.relationship("Inspection", foreign_keys=[inspection_id])
+
+    @property
+    def result_dict(self):
+        if not self.result:
+            return {}
+        try:
+            data = json.loads(self.result)
+        except (TypeError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def __repr__(self):
+        return f"<InferenceJob {self.id} {self.status}>"
+
+
 class Alert(db.Model):
     """
     Alert Table
@@ -333,6 +391,11 @@ class AuditEvent(db.Model):
     ip_address = db.Column(db.String(45), nullable=True)
     user_agent = db.Column(db.String(255), nullable=True)
     details = db.Column(db.Text, nullable=True)
+    # Tamper-evidence: entry_hash = SHA-256 over this row's immutable content plus
+    # the previous event's entry_hash. See services/audit.py. NULL on legacy rows
+    # written before the chain existed.
+    prev_hash = db.Column(db.String(64), nullable=True)
+    entry_hash = db.Column(db.String(64), nullable=True, index=True)
 
     actor = db.relationship("User", foreign_keys=[actor_id])
 

@@ -82,6 +82,28 @@ class Config:
     # Rate limiting storage (in-memory by default; use Redis for multi-worker prod).
     RATELIMIT_STORAGE_URI = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
 
+    # Data retention (PII / personal data governance). Inspections store plates
+    # and images; audit events store IP addresses. Both are personal data, so a
+    # deployment must be able to age them out. 0 (the default) means "retain
+    # forever" — retention is OFF until an operator sets a policy, because
+    # silently deleting highway-safety records would itself be unsafe. The purge
+    # is applied by the `flask atis-purge-expired` command (run it from cron).
+    RETENTION_DAYS = int(os.environ.get("ATIS_RETENTION_DAYS", "0"))
+    AUDIT_RETENTION_DAYS = int(os.environ.get("ATIS_AUDIT_RETENTION_DAYS", "0"))
+
+    # Async (background) inference. When on, /predict returns a job id immediately
+    # and a bounded in-process worker pool runs the slow model call off the
+    # request path. No external broker/worker — fits the single-container default.
+    ASYNC_INFERENCE = _env_bool("ATIS_ASYNC_INFERENCE", False)
+    INFERENCE_WORKERS = max(1, int(os.environ.get("ATIS_INFERENCE_WORKERS", "1")))
+    # Run jobs inline instead of on the pool (deterministic tests / debugging).
+    INFERENCE_SYNC_JOBS = _env_bool("ATIS_INFERENCE_SYNC_JOBS", False)
+
+    # Short-TTL in-process cache for expensive dashboard/report aggregations.
+    # 0 (default) disables caching, so results are always live. A small value
+    # (e.g. 30) bounds staleness while cutting repeated aggregate recomputation.
+    STATS_CACHE_SECONDS = int(os.environ.get("ATIS_STATS_CACHE_SECONDS", "0"))
+
     # Behaviour flags — demo conveniences are disabled in production by default.
     SEED_DEMO_DATA = _env_bool("ATIS_SEED_DEMO", not IS_PRODUCTION)
     ENABLE_DEMO_LOGIN_ALIASES = _env_bool("ATIS_DEMO_ALIASES", not IS_PRODUCTION)

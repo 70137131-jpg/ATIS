@@ -19,3 +19,6 @@ Tire Textures/
 *.bak.pt
 runs/**/weights/last*.pt
 runs/**/weights/epoch*.pt
+
+# coverage
+.coverage
