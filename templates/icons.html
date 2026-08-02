@@ -1,6 +1,6 @@
 {% macro icon(name, size=18, stroke=2, class_name="") -%}
 <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    stroke-width="{{ stroke }}" stroke-linecap="round" stroke-linejoin="round"{% if class_name %} class="{{ class_name }}"{% endif %}>
+    stroke-width="{{ stroke }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"{% if class_name %} class="{{ class_name }}"{% endif %}>
     {% if name == "dashboard" %}
     <rect x="3" y="3" width="7" height="7" />
     <rect x="14" y="3" width="7" height="7" />

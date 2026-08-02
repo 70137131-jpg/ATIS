@@ -7,15 +7,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="{% block description %}NHA — Automated Highway Inspection System{% endblock %}">
     <title>{% block title %}NHA{% endblock %}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% block extra_css %}{% endblock %}
     <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
 </head>
 
 <body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <div class="layout">
         <!-- ===== Sidebar ===== -->
         <aside class="sidebar" id="sidebar">
@@ -29,54 +28,54 @@
 
             <div class="sidebar-section-label">MAIN</div>
             <nav class="sidebar-nav">
-                <a href="{{ url_for('dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'dashboard' }}" id="nav-dashboard">
+                <a href="{{ url_for('dashboard') }}" class="nav-item {{ 'active' if request.endpoint == 'dashboard' }}"{% if request.endpoint == 'dashboard' %} aria-current="page"{% endif %} id="nav-dashboard">
                     {{ icon("dashboard") }}
                     <span>Dashboard</span>
                 </a>
                 {% if can_run_inspections %}
-                <a href="{{ url_for('new_inspection') }}" class="nav-item {{ 'active' if request.endpoint == 'new_inspection' }}" id="nav-inspect">
+                <a href="{{ url_for('new_inspection') }}" class="nav-item {{ 'active' if request.endpoint == 'new_inspection' }}"{% if request.endpoint == 'new_inspection' %} aria-current="page"{% endif %} id="nav-inspect">
                     {{ icon("plus-circle") }}
                     <span>New Inspection</span>
                 </a>
                 {% endif %}
                 {% if can_run_inspections %}
-                <a href="{{ url_for('live_feed') }}" class="nav-item {{ 'active' if request.endpoint == 'live_feed' }}" id="nav-live">
+                <a href="{{ url_for('live_feed') }}" class="nav-item {{ 'active' if request.endpoint == 'live_feed' }}"{% if request.endpoint == 'live_feed' %} aria-current="page"{% endif %} id="nav-live">
                     {{ icon("video") }}
                     <span>Live Feed</span>
                 </a>
                 {% endif %}
                 {% if can_manage_alerts %}
-                <a href="{{ url_for('alerts') }}" class="nav-item {{ 'active' if request.endpoint == 'alerts' }}" id="nav-alerts">
+                <a href="{{ url_for('alerts') }}" class="nav-item {{ 'active' if request.endpoint == 'alerts' }}"{% if request.endpoint == 'alerts' %} aria-current="page"{% endif %} id="nav-alerts">
                     {{ icon("alert-triangle") }}
                     <span>Alerts</span>
                 </a>
                 {% endif %}
-                <a href="{{ url_for('history') }}" class="nav-item {{ 'active' if request.endpoint == 'history' }}" id="nav-history">
+                <a href="{{ url_for('history') }}" class="nav-item {{ 'active' if request.endpoint == 'history' }}"{% if request.endpoint == 'history' %} aria-current="page"{% endif %} id="nav-history">
                     {{ icon("clock") }}
                     <span>History</span>
                 </a>
                 {% if can_review_inspections %}
-                <a href="{{ url_for('anpr_review_queue') }}" class="nav-item {{ 'active' if request.endpoint == 'anpr_review_queue' }}" id="nav-anpr-review">
+                <a href="{{ url_for('anpr_review_queue') }}" class="nav-item {{ 'active' if request.endpoint == 'anpr_review_queue' }}"{% if request.endpoint == 'anpr_review_queue' %} aria-current="page"{% endif %} id="nav-anpr-review">
                     {{ icon("search") }}
                     <span>ANPR Review</span>
                 </a>
                 {% endif %}
                 {% if can_view_reports %}
-                <a href="{{ url_for('reports') }}" class="nav-item {{ 'active' if request.endpoint == 'reports' }}" id="nav-reports">
+                <a href="{{ url_for('reports') }}" class="nav-item {{ 'active' if request.endpoint == 'reports' }}"{% if request.endpoint == 'reports' %} aria-current="page"{% endif %} id="nav-reports">
                     {{ icon("file-text") }}
                     <span>Reports</span>
                 </a>
                 {% endif %}
                 {% if can_manage_users %}
-                <a href="{{ url_for('admin_users') }}" class="nav-item {{ 'active' if request.endpoint == 'admin_users' }}" id="nav-users">
+                <a href="{{ url_for('admin_users') }}" class="nav-item {{ 'active' if request.endpoint == 'admin_users' }}"{% if request.endpoint == 'admin_users' %} aria-current="page"{% endif %} id="nav-users">
                     {{ icon("users") }}
                     <span>Users</span>
                 </a>
-                <a href="{{ url_for('operations_admin') }}" class="nav-item {{ 'active' if request.endpoint in ['operations_admin', 'create_location', 'update_location', 'create_camera', 'update_camera'] }}" id="nav-operations">
+                <a href="{{ url_for('operations_admin') }}" class="nav-item {{ 'active' if request.endpoint in ['operations_admin', 'create_location', 'update_location', 'create_camera', 'update_camera'] }}"{% if request.endpoint in ['operations_admin', 'create_location', 'update_location', 'create_camera', 'update_camera'] %} aria-current="page"{% endif %} id="nav-operations">
                     {{ icon("truck") }}
                     <span>Operations</span>
                 </a>
-                <a href="{{ url_for('audit_events') }}" class="nav-item {{ 'active' if request.endpoint == 'audit_events' }}" id="nav-audit">
+                <a href="{{ url_for('audit_events') }}" class="nav-item {{ 'active' if request.endpoint == 'audit_events' }}"{% if request.endpoint == 'audit_events' %} aria-current="page"{% endif %} id="nav-audit">
                     {{ icon("clock") }}
                     <span>Audit Log</span>
                 </a>
@@ -156,7 +155,7 @@
             </header>
 
             <!-- Page Content -->
-            <main class="content">
+            <main class="content" id="main-content" tabindex="-1">
                 {% block content %}{% endblock %}
             </main>
         </div>

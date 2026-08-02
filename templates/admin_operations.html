@@ -18,7 +18,7 @@
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}
-<div class="flash-stack">
+<div class="flash-stack" role="status" aria-live="polite">
     {% for category, message in messages %}
     <div class="flash-line flash-{{ category }}">{{ message }}</div>
     {% endfor %}
@@ -91,11 +91,11 @@
         <table class="admin-table operations-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Zone</th>
-                    <th>Status</th>
-                    <th>Cameras</th>
-                    <th>Actions</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Zone</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Cameras</th>
+                    <th scope="col">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -144,12 +144,12 @@
         <table class="admin-table operations-table cameras-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Location</th>
-                    <th>Zone</th>
-                    <th>Assigned User</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Location</th>
+                    <th scope="col">Zone</th>
+                    <th scope="col">Assigned User</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Actions</th>
                 </tr>
             </thead>
             <tbody>

@@ -301,6 +301,26 @@
         if (latestBoxes.length) drawBoxes(latestBoxes);
     });
 
+    function delay(ms) {
+        return new Promise(function (resolve) { setTimeout(resolve, ms); });
+    }
+
+    // Async-inference mode: /predict returns 202 with a status_url; poll it until
+    // the background job finishes, then use its result (same shape as the sync
+    // response). Synchronous mode returns the result directly and skips this.
+    async function pollJob(statusUrl) {
+        for (;;) {
+            await delay(1500);
+            var resp = await fetch(statusUrl, {
+                headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" }
+            });
+            if (!resp.ok) throw new Error("Job status failed with status " + resp.status);
+            var body = await resp.json();
+            if (body.status === "done") return body.result;
+            if (body.status === "error") throw new Error(body.error || "Analysis failed");
+        }
+    }
+
     form.addEventListener("submit", async function (e) {
         e.preventDefault();
         setSubmitLoading(true);
@@ -317,6 +337,9 @@
             });
             if (!response.ok) throw new Error("Analysis failed with status " + response.status);
             var data = await response.json();
+            if (data && data.status_url) {
+                data = await pollJob(data.status_url);
+            }
             renderResult(data);
             drawBoxes(data.bounding_boxes || data.boxes || data.detections || []);
         } catch (error) {

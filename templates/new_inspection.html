@@ -20,7 +20,7 @@
                 <!-- Flash Messages -->
                 {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
-                <div class="flash-messages">
+                <div class="flash-messages" role="status" aria-live="polite">
                     {% for category, message in messages %}
                     <div class="flash-msg flash-{{ category }}">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
