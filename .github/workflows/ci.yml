@@ -18,7 +18,7 @@ jobs:
     name: Pytest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
       - uses: actions/setup-python@v5
@@ -50,7 +50,7 @@ jobs:
     env:
       DATABASE_URL: sqlite:////tmp/atis-ci-migration-${{ github.run_id }}.db
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
       - uses: actions/setup-python@v5
@@ -100,7 +100,7 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg2://atis:atis@localhost:5432/atis_ci
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
       - uses: actions/setup-python@v5
@@ -128,7 +128,7 @@ jobs:
     name: Dependency vulnerability audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -144,7 +144,7 @@ jobs:
     name: Docker build smoke
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
       - name: Build Docker image
