@@ -1,5 +1,5 @@
 # ATIS (Flask + YOLOv11 classifier) production image.
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # OpenCV (opencv-python) loads these shared libs on import even when the live
 # camera UI is unused; every other dependency ships as a manylinux wheel.
