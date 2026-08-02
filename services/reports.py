@@ -10,10 +10,23 @@ from io import StringIO
 from sqlalchemy import text
 
 from models import db
+from services.cache import get_or_compute
 
 
 def defect_distribution_rows(start: datetime, end: datetime):
-    """Return (defect, count) rows using normalized rows plus legacy fallback."""
+    """Return (defect, count) rows using normalized rows plus legacy fallback.
+
+    Cached for the configured short TTL (keyed by the date range), since the
+    aggregation is one of the heavier report queries and reports are refreshed
+    far more often than the underlying data changes.
+    """
+    return get_or_compute(
+        f"defect_dist:{start.isoformat()}:{end.isoformat()}",
+        lambda: _defect_distribution_rows(start, end),
+    )
+
+
+def _defect_distribution_rows(start: datetime, end: datetime):
     dialect = db.session.get_bind().dialect.name
     params = {"start": start, "end": end}
 

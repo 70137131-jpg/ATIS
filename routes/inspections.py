@@ -26,8 +26,20 @@ from flask import (
 from PIL import Image, UnidentifiedImageError
 
 from atis_inference import classify_tyre_image
-from models import Alert, Camera, DefectType, Inspection, InspectionDefect, Location, SavedFilter, User, db
+from models import (
+    Alert,
+    Camera,
+    DefectType,
+    InferenceJob,
+    Inspection,
+    InspectionDefect,
+    Location,
+    SavedFilter,
+    User,
+    db,
+)
 from routes.common import (
+    ADMIN_ROLES,
     INSPECTION_REVIEWER_ROLES,
     INSPECTION_OPERATOR_ROLES,
     clean_metadata_value,
@@ -41,6 +53,7 @@ from services.audit import log_audit_event
 from services.anpr import anpr_min_confidence, is_low_confidence, read_plate_image
 from services.defects import normalized_defect_name, sync_inspection_defects
 from services.image_storage import load_image, signed_image_url, store_image
+from services.inference_jobs import submit_job
 from services.operations import (
     normalize_operational_name,
     resolve_operational_context,
@@ -502,53 +515,19 @@ def delete_history_filter(filter_id):
     return redirect(url_for("history"))
 
 
-@roles_required(*INSPECTION_OPERATOR_ROLES)
-def predict():
-    """Accept an image upload, run inference, and save an inspection record."""
-    if "image" not in request.files:
-        flash("No image file uploaded.", "error")
-        return redirect(url_for("new_inspection"))
+def _run_and_persist_inspection(
+    *, save_path, unique_name, ext, image_rel_path, plate, location, camera, actor_id
+):
+    """Run OCR + classification and persist the Inspection/Alert/audit rows.
 
-    file = request.files["image"]
-    if file.filename == "" or not allowed_file(file.filename):
-        return form_error("Invalid file. Please upload a JPG, PNG, BMP, or WebP image.")
-
-    plate, error = normalize_plate(request.form.get("plate", ""))
-    if error:
-        return form_error(error)
-    location, error = clean_metadata_value(
-        request.form.get("location", ""),
-        max_length=200,
-        field_name="Location",
-        allow_empty=True,
-    )
-    if error:
-        return form_error(error)
-    camera, error = clean_metadata_value(
-        request.form.get("camera", ""),
-        max_length=20,
-        field_name="Camera",
-        uppercase=True,
-        allow_empty=True,
-    )
-    if error:
-        return form_error(error)
-    location = location or "Unknown Location"
+    Pure compute + DB with no request/response/flash use, so both the synchronous
+    /predict path and the background worker call it. Returns a result dict
+    *without* URLs (callers add those in a request context). Raises RuntimeError
+    on inference or storage failure, after discarding the saved upload.
+    """
+    actor = db.session.get(User, actor_id) if actor_id else None
     location_ref, camera_ref = resolve_operational_context(location, camera)
 
-    ext = file.filename.rsplit(".", 1)[1].lower()
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    upload_folder = current_app.config["UPLOAD_FOLDER"]
-    save_path = os.path.join(upload_folder, unique_name)
-    os.makedirs(upload_folder, exist_ok=True)
-    file.save(save_path)
-
-    validation_error = _validate_saved_image(save_path)
-    if validation_error:
-        _discard_upload(save_path)
-        return form_error(validation_error)
-
-    image_rel_path = f"uploads/{unique_name}"
     try:
         with open(save_path, "rb") as _fh:
             image_bytes = _fh.read()
@@ -589,8 +568,7 @@ def predict():
     except Exception as exc:  # noqa: BLE001
         current_app.logger.error("ATIS inference error: %s", exc)
         _discard_upload(save_path)
-        flash("AI model inference failed. Please verify dependencies and model weights.", "error")
-        return redirect(url_for("new_inspection"))
+        raise RuntimeError("AI model inference failed.") from exc
 
     status = prediction["status"]
     confidence = prediction["confidence"]
@@ -608,8 +586,7 @@ def predict():
         except Exception as exc:  # noqa: BLE001
             current_app.logger.error("Image storage failed: %s", exc)
             _discard_upload(save_path)
-            flash("Could not persist uploaded image. Please try again.", "error")
-            return redirect(url_for("new_inspection"))
+            raise RuntimeError("Could not persist uploaded image.") from exc
 
     inspection = Inspection(
         timestamp=datetime.now(timezone.utc),
@@ -618,7 +595,7 @@ def predict():
         camera_id=camera_ref.id if camera_ref else None,
         location=location,
         camera=camera,
-        created_by_id=g.current_user.id,
+        created_by_id=actor_id,
         status=status,
         confidence=confidence,
         predicted_class=predicted_class,
@@ -654,6 +631,7 @@ def predict():
         "inspection.created",
         entity_type="inspection",
         entity_id=inspection.id,
+        actor=actor,
         details={
             "status": status,
             "confidence": confidence,
@@ -682,45 +660,235 @@ def predict():
             "alert.created",
             entity_type="alert",
             entity_id=alert.id,
+            actor=actor,
             details={"inspection_id": inspection.id, "source": "inspection_prediction"},
         )
 
     db.session.commit()
 
-    if wants_json_response():
-        return jsonify({
-            "inspection_id": inspection.id,
-            "status": status,
-            "confidence": confidence,
-            "defects": defects_list,
-            "bounding_boxes": bounding_boxes,
-            "predicted_class": predicted_class,
-            "model_path": model_path,
-            "model_version": model_version,
-            "model_threshold": prediction.get("threshold"),
-            "inference_ms": inference_ms,
-            "plate": plate,
-            "plate_source": plate_source,
-            "plate_confidence": plate_confidence,
-            "plate_raw_text": plate_raw_text,
-            "image_url": url_for("inspection_image", inspection_id=inspection.id),
-            "detail_url": url_for("inspection_detail", inspection_id=inspection.id),
-            "dashboard_url": url_for("dashboard"),
-            "duplicate_of": duplicate_inspection.id if duplicate_inspection else None,
-        })
+    return {
+        "inspection_id": inspection.id,
+        "status": status,
+        "confidence": confidence,
+        "defects": defects_list,
+        "bounding_boxes": bounding_boxes,
+        "predicted_class": predicted_class,
+        "model_path": model_path,
+        "model_version": model_version,
+        "model_threshold": prediction.get("threshold"),
+        "inference_ms": inference_ms,
+        "plate": plate,
+        "plate_source": plate_source,
+        "plate_confidence": plate_confidence,
+        "plate_raw_text": plate_raw_text,
+        "duplicate_of": duplicate_inspection.id if duplicate_inspection else None,
+    }
 
-    if duplicate_inspection:
+
+def _predict_response_payload(result):
+    """Add request-scoped URLs to a core inference result dict."""
+    inspection_id = result["inspection_id"]
+    return {
+        **result,
+        "image_url": url_for("inspection_image", inspection_id=inspection_id),
+        "detail_url": url_for("inspection_detail", inspection_id=inspection_id),
+        "dashboard_url": url_for("dashboard"),
+    }
+
+
+def _sync_predict_response(result):
+    """Build the synchronous /predict response (JSON for XHR, redirect for forms)."""
+    if wants_json_response():
+        return jsonify(_predict_response_payload(result))
+
+    inspection_id = result["inspection_id"]
+    if result["duplicate_of"]:
         flash(
-            f"Inspection #{inspection.id} completed. Uploaded image matches inspection #{duplicate_inspection.id}.",
+            f"Inspection #{inspection_id} completed. Uploaded image matches inspection #{result['duplicate_of']}.",
             "warning",
         )
-        return redirect(url_for("inspection_detail", inspection_id=inspection.id))
+        return redirect(url_for("inspection_detail", inspection_id=inspection_id))
 
     flash(
-        f"Inspection #{inspection.id} completed - {predicted_class.upper()} ({confidence}%)",
-        "success" if status == "safe" else "warning",
+        f"Inspection #{inspection_id} completed - {result['predicted_class'].upper()} ({result['confidence']}%)",
+        "success" if result["status"] == "safe" else "warning",
     )
-    return redirect(url_for("inspection_detail", inspection_id=inspection.id))
+    return redirect(url_for("inspection_detail", inspection_id=inspection_id))
+
+
+def _process_job(app, job_id):
+    """Background worker: run a queued InferenceJob to completion.
+
+    Runs in a pool thread, so it pushes its own application context. Failures are
+    captured on the job row (status='error') rather than raised, and the job is
+    never marked done unless the inspection actually persisted.
+    """
+    with app.app_context():
+        job = db.session.get(InferenceJob, job_id)
+        if job is None:
+            return
+        job.status = "running"
+        job.started_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        try:
+            result = _run_and_persist_inspection(
+                save_path=job.image_path,
+                unique_name=job.unique_name,
+                ext=job.ext,
+                image_rel_path=job.image_rel_path,
+                plate=job.plate or "",
+                location=job.location or "Unknown Location",
+                camera=job.camera or "",
+                actor_id=job.created_by_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - record failure on the job row
+            db.session.rollback()
+            job = db.session.get(InferenceJob, job_id)
+            if job is not None:
+                job.status = "error"
+                job.error = str(exc)[:1000]
+                job.finished_at = datetime.now(timezone.utc)
+                db.session.commit()
+            app.logger.error("Inference job %s failed: %s", job_id, exc)
+            return
+
+        job.inspection_id = result["inspection_id"]
+        job.result = json.dumps(result)
+        job.status = "done"
+        job.finished_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+
+def _job_or_404_for_current_user(job_id):
+    """Load a job the current user is allowed to see (submitter or admin)."""
+    job = db.get_or_404(InferenceJob, job_id)
+    if job.created_by_id != g.current_user.id and g.current_user.role not in ADMIN_ROLES:
+        return None
+    return job
+
+
+@roles_required(*INSPECTION_OPERATOR_ROLES)
+def inference_job_status(job_id):
+    """JSON status for a background inference job (polled by the upload UI)."""
+    job = _job_or_404_for_current_user(job_id)
+    if job is None:
+        return jsonify({"error": "Not found"}), 404
+    payload = {"job_id": job.id, "status": job.status, "error": job.error}
+    if job.status == "done" and job.result:
+        payload["result"] = _predict_response_payload(job.result_dict)
+    return jsonify(payload)
+
+
+@roles_required(*INSPECTION_OPERATOR_ROLES)
+def inference_job_wait(job_id):
+    """HTML page that polls the job status and forwards to the result."""
+    job = _job_or_404_for_current_user(job_id)
+    if job is None:
+        return Response("Not found", status=404)
+    return render_template(
+        "processing.html",
+        user=session["user"],
+        role=session["role"],
+        job=job,
+        status_url=url_for("inference_job_status", job_id=job.id),
+        new_inspection_url=url_for("new_inspection"),
+    )
+
+
+@roles_required(*INSPECTION_OPERATOR_ROLES)
+def predict():
+    """Accept an image upload, run inference, and save an inspection record.
+
+    Synchronous by default. When ATIS_ASYNC_INFERENCE is enabled, the slow model
+    call is handed to a background worker and the request returns a job id (202
+    for XHR, or a polling page for form posts) immediately.
+    """
+    if "image" not in request.files:
+        flash("No image file uploaded.", "error")
+        return redirect(url_for("new_inspection"))
+
+    file = request.files["image"]
+    if file.filename == "" or not allowed_file(file.filename):
+        return form_error("Invalid file. Please upload a JPG, PNG, BMP, or WebP image.")
+
+    plate, error = normalize_plate(request.form.get("plate", ""))
+    if error:
+        return form_error(error)
+    location, error = clean_metadata_value(
+        request.form.get("location", ""),
+        max_length=200,
+        field_name="Location",
+        allow_empty=True,
+    )
+    if error:
+        return form_error(error)
+    camera, error = clean_metadata_value(
+        request.form.get("camera", ""),
+        max_length=20,
+        field_name="Camera",
+        uppercase=True,
+        allow_empty=True,
+    )
+    if error:
+        return form_error(error)
+    location = location or "Unknown Location"
+
+    ext = file.filename.rsplit(".", 1)[1].lower()
+    unique_name = f"{uuid.uuid4().hex}.{ext}"
+    upload_folder = current_app.config["UPLOAD_FOLDER"]
+    save_path = os.path.join(upload_folder, unique_name)
+    os.makedirs(upload_folder, exist_ok=True)
+    file.save(save_path)
+
+    validation_error = _validate_saved_image(save_path)
+    if validation_error:
+        _discard_upload(save_path)
+        return form_error(validation_error)
+
+    image_rel_path = f"uploads/{unique_name}"
+
+    if current_app.config["ASYNC_INFERENCE"]:
+        job = InferenceJob(
+            id=uuid.uuid4().hex,
+            status="queued",
+            created_by_id=g.current_user.id,
+            image_path=save_path,
+            unique_name=unique_name,
+            ext=ext,
+            image_rel_path=image_rel_path,
+            plate=plate,
+            location=location,
+            camera=camera,
+        )
+        db.session.add(job)
+        db.session.commit()
+        submit_job(current_app._get_current_object(), job.id, _process_job)
+
+        if wants_json_response():
+            return jsonify({
+                "job_id": job.id,
+                "status": job.status,
+                "status_url": url_for("inference_job_status", job_id=job.id),
+            }), 202
+        return redirect(url_for("inference_job_wait", job_id=job.id))
+
+    try:
+        result = _run_and_persist_inspection(
+            save_path=save_path,
+            unique_name=unique_name,
+            ext=ext,
+            image_rel_path=image_rel_path,
+            plate=plate,
+            location=location,
+            camera=camera,
+            actor_id=g.current_user.id,
+        )
+    except RuntimeError as exc:
+        flash(f"{exc} Please verify dependencies and model weights.", "error")
+        return redirect(url_for("new_inspection"))
+
+    return _sync_predict_response(result)
 
 
 def register_routes(app, limiter):
@@ -747,6 +915,8 @@ def register_routes(app, limiter):
     )
     app.add_url_rule("/media/inspection/<int:inspection_id>", "inspection_image", inspection_image)
     app.add_url_rule("/inspect", "new_inspection", new_inspection)
+    app.add_url_rule("/jobs/<job_id>", "inference_job_status", inference_job_status)
+    app.add_url_rule("/jobs/<job_id>/wait", "inference_job_wait", inference_job_wait)
     # Inference and OCR are the most expensive requests the app serves (seconds
     # of CPU each on a 1 GB instance), so both are rate-limited per client IP.
     app.add_url_rule(

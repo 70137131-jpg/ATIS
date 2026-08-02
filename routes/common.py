@@ -122,9 +122,16 @@ def session_user():
     if user is not None and not user.is_active:
         return None
     if user is not None:
+        # Server-side session revocation: a session carrying a stale epoch (after
+        # a password change or forced logout-everywhere) is rejected. Sessions
+        # predating this field carry no epoch and are transparently upgraded.
+        session_epoch = session.get("session_epoch")
+        if session_epoch is not None and session_epoch != user.session_epoch:
+            return None
         session["user_id"] = user.id
         session["user"] = user.email
         session["role"] = user.role
+        session["session_epoch"] = user.session_epoch
     return user
 
 
