@@ -33,7 +33,7 @@ mpmath==1.3.0
 networkx==3.6.1
 numpy==2.5.0
 nvidia-ml-py==13.610.43
-opencv-python==4.13.0.92
+opencv-python==5.0.0.93
 ordered-set==4.1.0
 packaging==26.2
 pillow==12.2.0
