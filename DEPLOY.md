@@ -20,21 +20,30 @@ trusting verdicts from a real checkpoint, work through every line:
 - [ ] Held-out test metrics (cracked recall, false-pass rate, false-flag rate,
       confusion matrix, threshold sweep) are recorded in `model_card.json`
       (`test_metrics`). Re-run `evaluate_model.py` after any retrain.
+- [ ] Model↔app contract test passes against the real weights
+      (`pytest tests/test_model_contract.py`).
 - [ ] **Field validation on the target cameras** — the training data is mostly
-      controlled/web imagery. Pilot on the real checkpoint feed and measure
-      recall/false-flag across: day + night (with checkpoint lighting), wet and
-      dirty tyres, motion blur, partial tyres in frame, different vehicle
-      classes, shadows/glare, and deliberate non-tyre inputs. Do not enforce
-      verdicts until this data exists.
+      controlled/web imagery. Collect real footage per
+      `docs/field_validation_protocol.md`, run `python3 field_validation.py
+      --field-dir …` (records `model_card.json → field_metrics`), and clear
+      Gate 3 in `docs/model_governance.md`. **Keep verdicts advisory until
+      signed off.**
+- [ ] Live monitoring scheduled: `flask atis-model-monitor --strict` in cron,
+      wired to an alert (Gate 4, `docs/model_governance.md`).
 
 **Persistence & data**
 - [ ] `DATABASE_URL` points at managed PostgreSQL (SQLite in a container is
       ephemeral and single-writer).
 - [ ] `ATIS_IMAGE_STORAGE=s3` with `ATIS_S3_BUCKET` (DB-blob storage is a demo
       default; images bloat Postgres fast).
-- [ ] Automated DB backups are enabled **and a restore has been rehearsed once**.
-- [ ] A retention/deletion policy exists for inspection images and audit rows
-      (they contain plates and IP addresses — that is personal data).
+- [ ] Automated DB backups are enabled (`scripts/backup_db.sh` on a schedule)
+      **and a restore has been rehearsed once** (`scripts/restore_db.sh` into a
+      scratch DB). See `docs/data_governance.md §4`.
+- [ ] A retention/deletion policy is configured — set `ATIS_RETENTION_DAYS` /
+      `ATIS_AUDIT_RETENTION_DAYS` and schedule `flask atis-purge-expired
+      --apply` (plates, images, and IP addresses are personal data). Subject
+      access/erasure via `atis-export-plate` / `atis-erase-plate`. See
+      `docs/data_governance.md`, `docs/privacy_policy.md`, `docs/DPIA.md`.
 
 **Runtime**
 - [ ] `SECRET_KEY` set (the app refuses to boot without it), `ATIS_ENV=production`.
@@ -44,6 +53,11 @@ trusting verdicts from a real checkpoint, work through every line:
 - [ ] If `WEB_CONCURRENCY > 1` or more than one instance: point
       `RATELIMIT_STORAGE_URI` at Redis. In-memory counters are per-process, so
       effective rate limits multiply per worker.
+- [ ] Platform health check points at `/readyz` (not `/healthz`), so traffic is
+      only routed once the DB/model are ready. Set `ATIS_LOG_JSON=1` for
+      structured logs. If the app is framed (e.g. HF Spaces), set
+      `ATIS_FRAME_ANCESTORS` to the parent origin. See
+      `docs/security_and_operations.md`.
 - [ ] The Docker image builds green in CI (`docker-smoke` job); if you changed
       the Dockerfile, also run `docker build -t atis .` locally once.
 
