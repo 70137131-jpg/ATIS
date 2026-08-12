@@ -1,6 +1,6 @@
 """Authentication and dashboard routes."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from flask import current_app, flash, redirect, render_template, request, session, url_for
 
@@ -96,8 +96,20 @@ def login():
     return render_template("login.html")
 
 
+def _utc_day_start():
+    """Return midnight UTC for the current day.
+
+    Inspection.timestamp is stored naive-UTC (see the datetime convention in
+    CLAUDE.md), so the day boundary must be built in UTC too. A naive
+    datetime.now() would take the *host's local* wall clock and compare it
+    against UTC-stored rows, shifting the "today" window by the host's UTC
+    offset on any non-UTC machine.
+    """
+    return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def _compute_dashboard_stats():
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = _utc_day_start()
     tomorrow_start = today_start + timedelta(days=1)
     today_filter = (
         Inspection.timestamp >= today_start,
@@ -135,10 +147,11 @@ def _compute_dashboard_stats():
 def dashboard():
     inspections = Inspection.query.order_by(Inspection.timestamp.desc()).limit(10).all()
 
-    # Cached for the configured short TTL (keyed by day so "today" buckets roll
-    # over correctly); disabled by default, so numbers are live unless enabled.
+    # Cached for the configured short TTL (keyed by UTC day, matching the window
+    # _compute_dashboard_stats uses, so "today" buckets roll over together);
+    # disabled by default, so numbers are live unless enabled.
     stats = get_or_compute(
-        f"dashboard_stats:{datetime.now().date().isoformat()}",
+        f"dashboard_stats:{_utc_day_start().date().isoformat()}",
         _compute_dashboard_stats,
     )
 

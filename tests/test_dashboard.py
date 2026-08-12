@@ -1,12 +1,23 @@
 """Dashboard metric tests."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from models import Alert, Inspection, db
 
 
+def _utc_today_at(hour):
+    """Naive-UTC timestamp for today at ``hour``, matching how rows are stored.
+
+    Built from UTC (not the host's local clock) so the row lands inside the
+    dashboard's UTC "today" window regardless of the test machine's timezone.
+    """
+    return datetime.now(timezone.utc).replace(
+        hour=hour, minute=0, second=0, microsecond=0, tzinfo=None
+    )
+
+
 def test_dashboard_uses_today_counts_and_real_average_processing(auth_client, app):
-    today = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    today = _utc_today_at(9)
     yesterday = today - timedelta(days=1)
     with app.app_context():
         today_safe = Inspection(
