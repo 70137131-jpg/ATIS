@@ -14,8 +14,12 @@ clickjacking defence), `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
   embedding in a cross-site iframe (Hugging Face Spaces), set it to the parent,
   e.g. `'self' https://*.hf.space https://huggingface.co`.
 - The full CSP can be overridden with `ATIS_CSP` if a deployment needs custom
-  sources. The default allows Google Fonts; self-hosting the font (removing the
-  external dependency) would let you tighten `style-src`/`font-src` to `'self'`.
+  sources. The default is entirely first-party — `script-src`, `font-src`, and
+  `style-src` are all `'self'` (see "Self-hosted fonts" below), so no external
+  origin is reachable. `style-src` additionally carries `'unsafe-inline'` for the
+  inline `style="…"` attributes in the templates; removing those attributes is
+  what it would take to drop it. `img-src` also allows `data:` for inline
+  previews.
 
 ### Account lockout (`services/login_security.py`)
 Per-**account** throttle that complements the per-**IP** login rate limit: after
@@ -137,5 +141,10 @@ default, so the synchronous path and its behaviour are unchanged unless enabled.
 - **CD pipeline**: a staging environment, post-deploy smoke test, and automated
   rollback instead of `deploy_on_push` straight to production.
 - **Secrets manager** integration rather than plaintext env values in specs.
-- **E2E/browser tests, WCAG accessibility, i18n/Urdu** — see the main gap
-  analysis.
+- **E2E/browser tests** — the suite is server-side (`pytest` against the Flask
+  test client); no browser driver exercises the upload, live-feed, or MFA flows
+  end to end.
+- **WCAG accessibility** — the baseline pass is described under "Accessibility"
+  above; colour-contrast verification and a screen-reader pass on every flow are
+  still outstanding.
+- **i18n / Urdu** — not started; all template copy is hard-coded English.

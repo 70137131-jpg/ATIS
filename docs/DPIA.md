@@ -35,7 +35,7 @@
 |------|---------------------|--------------------------|-----------------|
 | **False negative** — cracked tyre passed as safe | Med / **High (safety)** | Asymmetric fail-safe threshold; low-confidence `normal` sent to review; live missed-defect monitoring (`atis-model-monitor`) | **Field-validate before enforcing verdicts** (`docs/model_governance.md`) |
 | Indefinite retention of plates/images | High / Med | Configurable retention + scheduled purge | Controller must set the windows |
-| Unauthorised access to images/plates | Med / High | Auth + RBAC, hashed passwords, audited access, non-root container | Add security headers, session revocation (roadmap) |
+| Unauthorised access to images/plates | Med / High | Auth + RBAC, hashed passwords, audited access, non-root container; security headers (`security.py`), session revocation via `users.session_epoch`, optional TOTP MFA + recovery codes, per-account lockout | Server-side session store — sessions are still signed cookies, so revocation depends on `SECRET_KEY` secrecy (`docs/security_and_operations.md`) |
 | Re-identification from images (bystanders) | Med / Med | Access controls; retention limits | Consider cropping to the tyre ROI |
 | Data loss | Med / High | Backup + rehearsed restore scripts | Schedule + rehearse (checklist) |
 | Function creep (ANPR used for tracking) | Med / High | Purpose limited to tyre safety; audit log | Governance/policy control by controller |

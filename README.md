@@ -252,20 +252,36 @@ replacing existing PostgreSQL rows.
 ## Project Layout
 
 ```text
-app.py                  Flask dashboard and API routes
-atis_inference.py       Shared YOLO classifier inference helper
+app.py                  Flask app factory, auth guard, CLI commands, health endpoints
+config.py               Centralised configuration and production validation
+security.py             Security headers (CSP, HSTS, nosniff, Referrer-Policy)
+observability.py        Structured logging and Sentry hooks
+metrics.py              Prometheus-style /metrics exposition
 models.py               SQLAlchemy models
-prepare_dataset.py      Reformat Tire Textures into Ultralytics layout
+atis_inference.py       Shared YOLO classifier inference helper
+routes/                 Flask blueprints (auth, inspections, live, alerts,
+                        reports, users, operations, audit; common.py holds
+                        shared decorators and role groups)
+services/               Business logic (inference jobs, reports, ANPR, audit,
+                        image storage, retention, MFA/TOTP, login security,
+                        model monitoring and feedback export)
+templates/              Jinja2 pages
+static/                 CSS, JS (incl. self-hosted vendor JS), fonts, images
+migrations/             Flask-Migrate / Alembic migrations
+tests/                  Pytest suite
+docs/                   Governance, security/ops, and model documentation
+scripts/                Database backup and restore helpers
+config/                 Live zone examples and runtime config
+instance/               Local SQLite database (gitignored)
+
+prepare_dataset.py      Build the Ultralytics dataset layout from image sources
 train_model.py          Train YOLO classifier
-evaluate_model.py       Validate trained classifier
+train_detector.py       Scaffold for a future detector (not wired into the app)
+evaluate_model.py       Validate trained classifier + threshold sweep
+field_validation.py     Evaluate on real checkpoint footage (model governance G3)
 test_tyre.py            CLI single-image classifier test
 calibrate_live_zones.py Draw fixed live camera tyre scan zones
 live_video_inspection.py OpenCV live camera inspection runner
-config/                 Live zone examples and runtime config
-templates/              Jinja2 pages
-static/                 CSS, JS, images, runtime uploads
-instance/               Local SQLite database
-migrations/             Flask-Migrate / Alembic migrations
-ATIS_Dataset/           Ultralytics classification dataset
-runs/classify/...       Trained ATIS classifier weights
+ATIS_Dataset/           Ultralytics classification dataset (gitignored)
+runs/classify/...       Trained ATIS classifier weights (Git LFS)
 ```

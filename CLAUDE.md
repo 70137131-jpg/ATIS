@@ -124,7 +124,10 @@ from model latency (`ATIS_INFERENCE_WORKERS`).
 (Prometheus-style `/metrics`), `services/model_monitoring.py` (drift signals),
 `services/retention.py` (data/audit pruning, `ATIS_RETENTION_DAYS` /
 `ATIS_AUDIT_RETENTION_DAYS`), `services/cache.py` (stats caching,
-`ATIS_STATS_CACHE_SECONDS`). Unauthenticated `/healthz` is in `PUBLIC_ENDPOINTS`.
+`ATIS_STATS_CACHE_SECONDS`). `PUBLIC_ENDPOINTS` (the `before_request` auth
+bypass) covers `login`, `mfa_verify`, `static`, `healthz`, `readyz`, and
+`metrics` — so `/readyz` is fully unauthenticated and `/metrics` is too unless
+`ATIS_METRICS_TOKEN` is set.
 
 **[models.py](models.py)** defines `User`, `Inspection`, `Alert`, `AuditEvent`,
 `DefectType`, `InspectionDefect`, MFA/recovery, inference-job, and operational
@@ -134,11 +137,15 @@ the `defect_list` property).
 
 **Database selection is automatic** ([config.py](config.py) `get_database_url`):
 SQLite at `instance/atis.db` by default, Postgres if `DATABASE_URL` is set
-(rewrites legacy `postgres://`). On startup, `ensure_local_database()` seeds demo
-users **only in development** (gated on SQLite *and* `Config.SEED_DEMO_DATA`).
-Postgres relies on the Alembic migrations in `migrations/` (currently through
-`0022`). **Image storage** is DB blobs by default; optional S3-compatible backend
-(`services/image_storage.py`) with signed URLs for production.
+(rewrites legacy `postgres://`). **Nothing is created or seeded at app startup** —
+both backends get their schema from the Alembic migrations in `migrations/`
+(currently through `0022`), so a fresh checkout needs `flask --app app db upgrade`.
+Demo users are seeded only by the explicit `flask --app app seed-demo-users`
+command (`ensure_demo_users()` in [app.py](app.py)), which `entrypoint.sh` runs
+when `ATIS_SEED_DEMO=1`; it refuses to seed the well-known README passwords in
+production unless `ATIS_DEMO_PASSWORD` is set. (`Config.SEED_DEMO_DATA` exists but
+is currently read by nothing.) **Image storage** is DB blobs by default; optional
+S3-compatible backend (`services/image_storage.py`) with signed URLs for production.
 
 ## Conventions
 

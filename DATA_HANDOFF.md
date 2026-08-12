@@ -3,6 +3,24 @@
 Self-contained context for a fresh Claude Code session. Goal: grow the tire
 dataset toward a production-grade classifier. Written 2026-06-29.
 
+> **Status note (2026-08-13): this is a historical snapshot; two sections below
+> have been overtaken by events.** Read these first:
+>
+> 1. **The metrics in "Assessment" are superseded.** A retrain and a held-out
+>    evaluation on 2026-07-04 recorded **99.0% top-1 accuracy, 99.3% cracked
+>    recall, 1.4% false-flag rate** (`model_card.json → test_metrics`, and
+>    `docs/model_threshold_calibration.md`). The "~83% / ~31% false-flag"
+>    figures below predate that and should not be quoted.
+> 2. **The dataset on disk no longer matches "Current dataset state".** Only
+>    `ATIS_Dataset/val` (295) and `ATIS_Dataset/test` (298) survive. The
+>    **`train/` split (1,380 images) and the `Tire Textures/` source folder are
+>    both gone**, so a retrain is not currently possible without re-downloading
+>    the sources — see the ⚠️ warning in that section.
+>
+> What has *not* changed: the conclusion that curated metrics do not prove field
+> performance. Field validation (Gate 3, `docs/model_governance.md`) is still
+> unmet — `model_card.json` has no `field_metrics` key.
+
 ## Project
 - **ATIS** (Automated Tire Inspection System) for Pakistan's NHA: a YOLOv11-nano
   **classifier** (`normal` vs `cracked`, image-level — no bounding boxes) + a Flask
@@ -15,9 +33,24 @@ dataset toward a production-grade classifier. Written 2026-06-29.
   ≥ threshold; any `cracked` or low-confidence `normal` → unsafe / manual review.
 
 ## Current dataset state
-`ATIS_Dataset/` holds **1,973 images** (Ultralytics classification layout
-`{train,val,test}/{normal,cracked}/`), freshly re-prepped (70/15/15, SHA-1 deduped,
-leakage-checked):
+
+> ⚠️ **As of 2026-08-13 this describes the dataset as built on 2026-06-29, not
+> what is on disk.** `ATIS_Dataset/train/` and the `Tire Textures/` source folder
+> have since been deleted; only `val/` (295) and `test/` (298) remain. **Back up
+> the surviving splits before running anything** — `prepare_dataset.py` starts
+> with `shutil.rmtree(ATIS_Dataset)` and, with `Tire Textures/` also gone, would
+> destroy them and rebuild almost nothing (see gotcha 1):
+>
+> ```bash
+> cp -a ATIS_Dataset ATIS_Dataset.backup
+> ```
+>
+> Note also that a rebuild draws a **new random split**, so the val/test sets the
+> 2026-07-04 metrics were measured on cannot be reproduced from the sources alone.
+
+As built on 2026-06-29, `ATIS_Dataset/` held **1,973 images** (Ultralytics
+classification layout `{train,val,test}/{normal,cracked}/`), freshly re-prepped
+(70/15/15, SHA-1 deduped, leakage-checked):
 
 | split | cracked | normal | total |
 |-------|--------:|-------:|------:|
@@ -33,12 +66,18 @@ leakage-checked):
   This 2nd source is **NOT on disk as a folder** (only its images, renamed by hash,
   live inside `ATIS_Dataset/`).
 
-## Assessment given to the user
+## Assessment given to the user (2026-06-29 — metrics superseded)
 - **Enough for an FYP demo, NOT for production.** Last eval ~83% top-1 accuracy and
   ~31% of good tires false-flagged as cracked. Root cause is narrow distribution
   (clean, well-lit studio/web photos), not just raw count. Need more **varied
   real-world** data (real trucks/dirt/wear, real cameras, day+night), target a few
   thousand per class.
+  > **Superseded:** the 2026-07-04 retrain records 99.0% accuracy / 1.4%
+  > false-flag on the curated test split. The *reasoning* above still holds
+  > though — those are curated numbers on the same narrow distribution, so they
+  > do not answer the field question. Treat a 99% curated score as a reason to
+  > check for split leakage (pHash dedup catches duplicate *images*, not two
+  > photos of the same physical tyre), not as production readiness.
 - **Night/low-light: it won't work reliably as built, and NO public tire-specific
   night dataset exists.** Only routes: (a) controlled checkpoint lighting (flood/IR)
   — most reliable; (b) self-collected night images; optionally (c) low-light/noise/
