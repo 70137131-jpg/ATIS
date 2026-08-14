@@ -18,13 +18,14 @@
     <div class="layout">
         <!-- ===== Sidebar ===== -->
         <aside class="sidebar" id="sidebar">
-            <div class="sidebar-brand">
+            <a href="{{ url_for('dashboard') }}" class="sidebar-brand" id="nav-brand">
                 <div class="sidebar-logo">NHA</div>
                 <div class="sidebar-brand-text">
                     <span class="sidebar-title">NHA</span>
                     <span class="sidebar-subtitle">Highway Inspection</span>
                 </div>
-            </div>
+                <span class="sr-only">— go to dashboard</span>
+            </a>
 
             <div class="sidebar-section-label">MAIN</div>
             <nav class="sidebar-nav">

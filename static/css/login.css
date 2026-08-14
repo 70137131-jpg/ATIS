@@ -71,7 +71,7 @@ body::before {
     width: 64px;
     height: 52px;
     background: linear-gradient(135deg, var(--gold), #d4a625);
-    color: #fff;
+    color: #123024;
     font-size: 0.95rem;
     font-weight: 800;
     border-radius: 8px;
@@ -264,7 +264,7 @@ input::placeholder {
 
 .btn-signin:hover {
     background: var(--blue-hover);
-    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.3);
+    box-shadow: 0 2px 8px rgba(37, 107, 79, 0.3);
 }
 
 .btn-signin:active {
@@ -275,7 +275,7 @@ input::placeholder {
 .demo-box {
     width: 100%;
     background: var(--blue-light);
-    border: 1px solid rgba(66, 133, 244, 0.15);
+    border: 1px solid rgba(37, 107, 79, 0.15);
     border-radius: var(--radius);
     padding: 1rem 1.25rem;
 }
