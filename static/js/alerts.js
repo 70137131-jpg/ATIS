@@ -2,37 +2,61 @@
     "use strict";
 
     document.addEventListener("DOMContentLoaded", function () {
-        var tabs = document.querySelectorAll(".alert-tabs .tab");
+        var statusTabs = document.querySelectorAll(".alert-tabs:not(.alert-kind-tabs) .tab");
+        var kindTabs = document.querySelectorAll(".alert-kind-tabs .tab");
         var tbody = document.getElementById("alerts-tbody");
         var sectionTitle = document.querySelector(".table-section-title");
         var emptyFilter = document.getElementById("alerts-empty-filter");
 
-        function filterByTab(activeTab) {
-            var filter = activeTab.getAttribute("data-tab");
-            tabs.forEach(function (tab) { tab.classList.remove("active"); });
-            activeTab.classList.add("active");
+        // Status and kind are independent filters; a row must match both.
+        var activeStatus = "pending";
+        var activeKind = "all";
 
-            var labels = {
-                pending: "Pending Alerts",
-                acknowledged: "Acknowledged Alerts",
-                resolved: "Resolved Alerts",
-                all: "All Alerts"
-            };
-            if (sectionTitle) sectionTitle.textContent = labels[filter] || "Alerts";
+        var statusLabels = {
+            pending: "Pending Alerts",
+            acknowledged: "Acknowledged Alerts",
+            resolved: "Resolved Alerts",
+            all: "All Alerts"
+        };
+        var kindLabels = {
+            defect: " — Defects",
+            review: " — Review"
+        };
+
+        function applyFilters() {
+            if (sectionTitle) {
+                sectionTitle.textContent =
+                    (statusLabels[activeStatus] || "Alerts") + (kindLabels[activeKind] || "");
+            }
             if (!tbody) return;
 
             var visible = 0;
             tbody.querySelectorAll("tr").forEach(function (row) {
                 var status = row.getAttribute("data-status");
-                var match = filter === "all" || status === filter;
+                var kind = row.getAttribute("data-kind");
+                var match =
+                    (activeStatus === "all" || status === activeStatus) &&
+                    (activeKind === "all" || kind === activeKind);
                 row.style.display = match ? "" : "none";
                 if (match && status && !row.classList.contains("alert-detail-row")) visible += 1;
             });
             if (emptyFilter) emptyFilter.style.display = visible === 0 ? "flex" : "none";
         }
 
-        tabs.forEach(function (tab) {
-            tab.addEventListener("click", function () { filterByTab(tab); });
-        });
+        function bind(tabs, attribute, onSelect) {
+            tabs.forEach(function (tab) {
+                tab.addEventListener("click", function () {
+                    tabs.forEach(function (other) { other.classList.remove("active"); });
+                    tab.classList.add("active");
+                    onSelect(tab.getAttribute(attribute));
+                    applyFilters();
+                });
+            });
+        }
+
+        bind(statusTabs, "data-tab", function (value) { activeStatus = value; });
+        bind(kindTabs, "data-kind", function (value) { activeKind = value; });
+
+        applyFilters();
     });
 })();

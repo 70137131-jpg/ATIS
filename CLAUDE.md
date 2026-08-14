@@ -62,12 +62,39 @@ first prediction. Weights are resolved by `find_model_path()`, which checks
 mapping is gated by an **asymmetric, fail-safe confidence threshold**
 (`get_conf_threshold()`, env `ATIS_CONF_THRESHOLD`, default `0.60`): a tire is
 passed as `safe` **only** when predicted `normal` *and* top-1 confidence ≥
-threshold. A `cracked` prediction is `unsafe` at any confidence; a low-confidence
-`normal` is downgraded to `unsafe` ("Low-confidence normal — manual review");
-**any unexpected class is also `unsafe`**. A best-effort non-tyre gate
-(contrast/edge-density, env `ATIS_FLAT_*`, optional COCO model) rejects obvious
-non-tyre/blank frames. The model is a 2-class softmax, so the winning confidence
-is always ≥ 0.50 — a threshold only bites above that.
+threshold. The model is a 2-class softmax, so the winning confidence is always
+≥ 0.50 — a threshold only bites above that.
+
+**The verdict is three-way (`outcome`) behind a binary `status`.**
+`OUTCOME_SAFE` / `OUTCOME_UNSAFE` / `OUTCOME_NEEDS_REVIEW` in
+[atis_inference.py](atis_inference.py) are the real distinction; `status`
+(`status_for_outcome()`, `safe` unless the outcome is `safe`… i.e. everything
+else is `unsafe`) is kept **binary and unchanged** so the reports, `/metrics`
+gauges and dashboard counters that read it keep their existing meaning. Do NOT
+add a third value to `Inspection.status` — put new distinctions in `outcome`.
+- `unsafe` — positive crack evidence. A `cracked` prediction at any confidence.
+- `needs_review` — the model could not call the frame: low-confidence `normal`,
+  an unexpected class, or a non-tyre frame. Fail-safe (never passed) but **not**
+  worked as a defect.
+- Alerts follow `outcome`, not `status` (`Alert.kind`): `unsafe` → a `defect`
+  alert, `needs_review` → a `review` alert, `not_tyre` → no alert at all. Both
+  kinds share one operator worklist so nothing is missed, and `/alerts` counts
+  and filters them apart so low-confidence noise cannot bury real defects.
+
+**The non-tyre gate runs before the verdict is interpreted, in both directions**
+(contrast/edge-density, env `ATIS_FLAT_*`, optional COCO model). It is not just a
+sanity check on `safe`: a wall or a blank frame the classifier happens to call
+`cracked` is not a cracked tyre either. A gated result carries
+`classifier_class` — what the model said before the gate overrode it — and when
+the gate overrides a **`cracked`** call, `routes/inspections.py` still raises an
+`Alert`, because that disagreement may be a real crack the gate misjudged.
+
+**The cached models are shared across threads** (gunicorn runs 1 worker ×
+`GUNICORN_THREADS`, plus the `ATIS_INFERENCE_WORKERS` async pool). Ultralytics
+mutates one internal predictor per model, so **every model call and every read
+off its `Results` must hold `_predict_lock`** (an `RLock`); `_model_load_lock`
+guards lazy construction. Do NOT call a cached model outside the lock — two
+overlapping predicts can hand one request another's verdict.
 
 **[app.py](app.py) owns the Flask app factory** (`create_app`) and extension
 initialization. Routes are split under `routes/`
@@ -137,7 +164,7 @@ SQLite at `instance/atis.db` by default, Postgres if `DATABASE_URL` is set
 (rewrites legacy `postgres://`). On startup, `ensure_local_database()` seeds demo
 users **only in development** (gated on SQLite *and* `Config.SEED_DEMO_DATA`).
 Postgres relies on the Alembic migrations in `migrations/` (currently through
-`0022`). **Image storage** is DB blobs by default; optional S3-compatible backend
+`0023`). **Image storage** is DB blobs by default; optional S3-compatible backend
 (`services/image_storage.py`) with signed URLs for production.
 
 ## Conventions

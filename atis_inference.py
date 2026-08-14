@@ -12,6 +12,7 @@ lines) — not a trained detector — so it needs no bounding-box training data.
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,29 @@ OBJECT_MODEL_CANDIDATES = (
     "yolo26n.pt",
 )
 
+# Classifier outputs that mean "this tyre is cracked". Shared so the verdict
+# mapping, the localizer trigger, and the alert rule in routes/ all agree.
+CRACKED_CLASS_NAMES = {"crack", "cracked", "cracking"}
+
+# Three-way verdict. `status` stays the binary safe/unsafe the schema, reports
+# and metrics have always used; `outcome` is the finer distinction that decides
+# how a result is worked:
+#   safe          — passed.
+#   unsafe        — positive evidence of a defect. Raises a defect alert.
+#   needs_review  — the system cannot vouch for this frame (low-confidence
+#                   normal, an unexpected class, a non-tyre image). Fail-safe,
+#                   so it is NOT passed, but it is not a crack either and must
+#                   not be worked as one — that conflation is what buries real
+#                   defects under low-confidence noise.
+OUTCOME_SAFE = "safe"
+OUTCOME_UNSAFE = "unsafe"
+OUTCOME_NEEDS_REVIEW = "needs_review"
+
+
+def status_for_outcome(outcome: str) -> str:
+    """Collapse a three-way outcome to the binary status the schema stores."""
+    return "safe" if outcome == OUTCOME_SAFE else "unsafe"
+
 VEHICLE_CLASSES = {"bicycle", "car", "motorcycle", "bus", "truck"}
 NON_TYRE_OBJECT_CLASSES = {
     "person", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear",
@@ -60,6 +84,24 @@ _classifier_model = None
 _classifier_path: Path | None = None
 _object_model = None
 _object_model_path: Path | None = None
+
+# The models are process-wide singletons, but the app serves them from several
+# threads at once (gunicorn runs 1 worker x GUNICORN_THREADS, and the async
+# inference pool adds ATIS_INFERENCE_WORKERS more). An Ultralytics model reuses
+# one internal predictor and mutates its state in place during a call, so two
+# concurrent predicts on the same object can interleave and cross-contaminate
+# results — one request receiving another's verdict. Both locks below prevent
+# that:
+#   _model_load_lock  — only one thread constructs a model (a cold race would
+#                       otherwise build two and hold double the weights in RAM).
+#   _predict_lock     — serializes every model call. Inference is CPU-bound and
+#                       already the bottleneck, so this costs little throughput,
+#                       and it stops 4 request threads x torch's own intra-op
+#                       threads from oversubscribing a small instance. It is an
+#                       RLock so a future nested call degrades to slow rather
+#                       than deadlocking a worker.
+_model_load_lock = threading.Lock()
+_predict_lock = threading.RLock()
 
 
 def candidate_model_paths() -> list[Path]:
@@ -170,11 +212,17 @@ def load_classifier(model_path: str | os.PathLike[str] | None = None) -> Any:
         raise FileNotFoundError(f"ATIS model weights not found. Searched: {searched}")
 
     resolved_path = resolved_path.resolve()
-    if _classifier_model is None or _classifier_path != resolved_path:
-        from ultralytics import YOLO
+    # Fast path: already loaded. Reading the globals is atomic, so a hit needs
+    # no lock; only construction does.
+    if _classifier_model is not None and _classifier_path == resolved_path:
+        return _classifier_model
 
-        _classifier_model = YOLO(str(resolved_path))
-        _classifier_path = resolved_path
+    with _model_load_lock:
+        if _classifier_model is None or _classifier_path != resolved_path:
+            from ultralytics import YOLO
+
+            _classifier_model = YOLO(str(resolved_path))
+            _classifier_path = resolved_path
 
     return _classifier_model
 
@@ -188,11 +236,15 @@ def load_object_detector() -> Any | None:
         return None
 
     resolved_path = resolved_path.resolve()
-    if _object_model is None or _object_model_path != resolved_path:
-        from ultralytics import YOLO
+    if _object_model is not None and _object_model_path == resolved_path:
+        return _object_model
 
-        _object_model = YOLO(str(resolved_path))
-        _object_model_path = resolved_path
+    with _model_load_lock:
+        if _object_model is None or _object_model_path != resolved_path:
+            from ultralytics import YOLO
+
+            _object_model = YOLO(str(resolved_path))
+            _object_model_path = resolved_path
 
     return _object_model
 
@@ -205,26 +257,29 @@ def _class_name(names: Any, class_id: int) -> str:
     return str(class_id)
 
 
-def _status_for_class(
+def _outcome_for_class(
     predicted_class: str, confidence: float, threshold: float
 ) -> tuple[str, list[str]]:
-    """Map a predicted class to a safety status using an asymmetric, fail-safe
-    confidence gate: a tire is only passed as 'safe' when the model is confident
-    it is 'normal'. ``confidence`` is the top-1 probability as a fraction (0-1)."""
+    """Map a predicted class to a three-way outcome using an asymmetric,
+    fail-safe confidence gate: a tire is only passed as 'safe' when the model is
+    confident it is 'normal'. ``confidence`` is the top-1 probability as a
+    fraction (0-1). Nothing here returns 'safe' on doubt — doubt becomes
+    ``needs_review``, which is still withheld from passing."""
     normalized = predicted_class.strip().lower()
 
     # A cracked tire is unsafe regardless of confidence — never gated.
-    if normalized in {"crack", "cracked", "cracking"}:
-        return "unsafe", ["Cracking"]
+    if normalized in CRACKED_CLASS_NAMES:
+        return OUTCOME_UNSAFE, ["Cracking"]
 
     if normalized == "normal":
         if confidence >= threshold:
-            return "safe", []
-        # Low-confidence 'normal' is not waved through; flag for manual review.
-        return "unsafe", ["Low-confidence normal — manual review"]
+            return OUTCOME_SAFE, []
+        # Low-confidence 'normal' is not waved through, but it is not evidence
+        # of a crack either — it is a frame the model could not call.
+        return OUTCOME_NEEDS_REVIEW, ["Low-confidence normal — manual review"]
 
     # Unknown classifier output should be reviewed instead of silently passed.
-    return "unsafe", [f"Unexpected class: {predicted_class}"]
+    return OUTCOME_NEEDS_REVIEW, [f"Unexpected class: {predicted_class}"]
 
 
 def _frame_array(model_input: Any) -> Any | None:
@@ -327,9 +382,13 @@ def _localize_cracks(model_input: Any, confidence: int, max_boxes: int = 2) -> l
         return []
 
 
-def _flat_frame_reason(model_input: Any) -> str | None:
-    """Reject blank/flat frames that the classifier otherwise over-passes."""
-    frame = _frame_array(model_input)
+def _flat_frame_reason(model_input: Any, frame: Any = None) -> str | None:
+    """Reject blank/flat frames that the classifier otherwise over-passes.
+
+    ``frame`` is an already-decoded array; pass it to avoid re-reading the image.
+    """
+    if frame is None:
+        frame = _frame_array(model_input)
     if frame is None:
         return None
 
@@ -356,27 +415,36 @@ def _flat_frame_reason(model_input: Any) -> str | None:
     return None
 
 
-def _detected_non_tyre_reason(model_input: Any) -> str | None:
-    """Use a generic object detector to reject obvious non-tyre subjects."""
+def _detected_non_tyre_reason(model_input: Any, frame: Any = None) -> str | None:
+    """Use a generic object detector to reject obvious non-tyre subjects.
+
+    ``frame`` is an already-decoded array; when given it is fed to the detector
+    instead of the path so the image is not read from disk a second time.
+    """
     detector = load_object_detector()
     if detector is None:
         return None
 
     try:
         threshold = get_object_conf_threshold()
-        results = detector(model_input, imgsz=320, conf=threshold, verbose=False)
-        if not results:
-            return None
+        detector_input = model_input if frame is None else frame
+        # Hold the lock across the call *and* the tensor reads below: the
+        # Results objects borrow buffers from the shared predictor, so they are
+        # only safe to touch before another thread starts the next predict.
+        with _predict_lock:
+            results = detector(detector_input, imgsz=320, conf=threshold, verbose=False)
+            if not results:
+                return None
 
-        names = results[0].names
-        boxes = getattr(results[0], "boxes", None)
-        if boxes is None or boxes.cls is None or boxes.conf is None:
-            return None
+            names = results[0].names
+            boxes = getattr(results[0], "boxes", None)
+            if boxes is None or boxes.cls is None or boxes.conf is None:
+                return None
 
-        detections: list[tuple[str, float]] = []
-        for class_id, conf in zip(boxes.cls.tolist(), boxes.conf.tolist()):
-            name = _class_name(names, int(class_id)).strip().lower()
-            detections.append((name, float(conf)))
+            detections: list[tuple[str, float]] = [
+                (_class_name(names, int(class_id)).strip().lower(), float(conf))
+                for class_id, conf in zip(boxes.cls.tolist(), boxes.conf.tolist())
+            ]
 
         if any(name in VEHICLE_CLASSES for name, conf in detections if conf >= threshold):
             return None
@@ -399,15 +467,38 @@ def _non_tyre_reason(model_input: Any) -> str | None:
     """Return a reason when the input should not be treated as a tyre."""
     if not tyre_gate_enabled():
         return None
-    return _flat_frame_reason(model_input) or _detected_non_tyre_reason(model_input)
+    # Decode once and share it with both checks. The gate now runs on every
+    # prediction rather than only on 'safe' ones, so this keeps the added cost
+    # to one detector pass instead of two extra image reads.
+    frame = _frame_array(model_input)
+    return (
+        _flat_frame_reason(model_input, frame)
+        or _detected_non_tyre_reason(model_input, frame)
+    )
 
 
-def _not_tyre_result(reason: str, *, model_path: str = "") -> dict[str, Any]:
+def _not_tyre_result(
+    reason: str, *, model_path: str = "", classifier_class: str | None = None
+) -> dict[str, Any]:
+    """Build the verdict for a frame the tyre gate rejected.
+
+    ``classifier_class`` records what the classifier called the frame before the
+    gate overrode it, so a consumer can tell "blank frame the model called
+    normal" apart from "the model called this cracked and the gate disagreed" —
+    the latter is a conflict a human still needs to see.
+    """
+    # A rejected frame is normally just unworkable input, not a defect. The
+    # exception is that conflict: the gate overrode a 'cracked' call, which may
+    # be a real crack the gate misjudged, so it stays a defect outcome.
+    overrode_crack = (classifier_class or "").strip().lower() in CRACKED_CLASS_NAMES
+    outcome = OUTCOME_UNSAFE if overrode_crack else OUTCOME_NEEDS_REVIEW
     return {
-        "status": "unsafe",
+        "status": status_for_outcome(outcome),
+        "outcome": outcome,
         "confidence": 0,
         "defects": [reason or "Not a tyre"],
         "predicted_class": "not_tyre",
+        "classifier_class": classifier_class,
         "threshold": round(get_conf_threshold() * 100),
         "low_confidence": False,
         "boxes": [],
@@ -421,39 +512,54 @@ def _classify_model_input(
     model_path: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     model = load_classifier(model_path)
-    results = model(model_input, verbose=False)
-    if not results:
-        raise RuntimeError("ATIS classifier returned no results.")
+    # Hold the lock across the predict *and* the reads off the Results object,
+    # which borrows buffers from the shared predictor. Everything after this
+    # block is plain Python scalars and is safe to run concurrently.
+    with _predict_lock:
+        results = model(model_input, verbose=False)
+        if not results:
+            raise RuntimeError("ATIS classifier returned no results.")
 
-    result = results[0]
-    if result.probs is None:
-        raise RuntimeError("ATIS classifier did not return classification probabilities.")
+        result = results[0]
+        if result.probs is None:
+            raise RuntimeError("ATIS classifier did not return classification probabilities.")
 
-    class_id = int(result.probs.top1)
-    conf_fraction = float(result.probs.top1conf.item())
-    predicted_class = _class_name(result.names, class_id)
+        class_id = int(result.probs.top1)
+        conf_fraction = float(result.probs.top1conf.item())
+        predicted_class = _class_name(result.names, class_id)
+
     threshold = get_conf_threshold()
-    status, defects = _status_for_class(predicted_class, conf_fraction, threshold)
     confidence = max(0, min(100, int(round(conf_fraction * 100))))
     resolved_model = str(_classifier_path or find_model_path() or "")
 
-    # A confident 'safe' still gets a non-tyre sanity check.
-    if status == "safe":
-        reason = _non_tyre_reason(model_input)
-        if reason:
-            return _not_tyre_result(reason, model_path=resolved_model)
+    # The non-tyre gate runs before the verdict is trusted, in *either*
+    # direction. Gating only the 'safe' branch left the opposite hole wide open:
+    # a wall, a person, or a blank frame that the classifier happens to call
+    # 'cracked' was reported as a cracked tyre and raised a real defect alert.
+    # A frame that is not a tyre cannot be a cracked tyre either way.
+    reason = _non_tyre_reason(model_input)
+    if reason:
+        return _not_tyre_result(
+            reason, model_path=resolved_model, classifier_class=predicted_class
+        )
+
+    outcome, defects = _outcome_for_class(predicted_class, conf_fraction, threshold)
 
     # Localize the crack so the overlay box lands on the defect, not the frame.
-    is_cracked = predicted_class.strip().lower() in {"crack", "cracked", "cracking"}
+    is_cracked = predicted_class.strip().lower() in CRACKED_CLASS_NAMES
     boxes = _localize_cracks(model_input, confidence) if is_cracked else []
 
     return {
-        "status": status,
+        "status": status_for_outcome(outcome),
+        "outcome": outcome,
         "confidence": confidence,
         "defects": defects,
         "predicted_class": predicted_class,
+        "classifier_class": predicted_class,
         "threshold": round(threshold * 100),
-        "low_confidence": status == "unsafe" and predicted_class.strip().lower() == "normal",
+        "low_confidence": (
+            outcome == OUTCOME_NEEDS_REVIEW and predicted_class.strip().lower() == "normal"
+        ),
         "boxes": boxes,
         "bounding_boxes": boxes,
         "model_path": resolved_model,

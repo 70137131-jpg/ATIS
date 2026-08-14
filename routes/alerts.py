@@ -13,6 +13,8 @@ from routes.common import (
 )
 from services.audit import log_audit_event
 
+ALERT_KINDS = ("defect", "review")
+ALERT_KIND_LABELS = {"defect": "Defect", "review": "Review"}
 ALERT_PRIORITIES = ("low", "medium", "high", "critical")
 ALERT_SEVERITIES = ("minor", "major", "critical")
 ESCALATION_STATUSES = ("none", "monitoring", "escalated", "sla_breached")
@@ -65,6 +67,10 @@ def alerts():
     pagination = db.paginate(alert_query, page=page, per_page=per_page, error_out=False)
     alert_rows = pagination.items
     pending_count = Alert.query.filter_by(status="pending").count()
+    # Split the pending figure so a wall of low-confidence review items can
+    # never disguise how many real defects are actually waiting.
+    pending_defect_count = Alert.query.filter_by(status="pending", kind="defect").count()
+    pending_review_count = Alert.query.filter_by(status="pending", kind="review").count()
     users = User.query.filter_by(is_active=True).order_by(User.email.asc()).all()
 
     return render_template(
@@ -73,6 +79,9 @@ def alerts():
         role=session["role"],
         alerts=alert_rows,
         pending_count=pending_count,
+        pending_defect_count=pending_defect_count,
+        pending_review_count=pending_review_count,
+        alert_kind_labels=ALERT_KIND_LABELS,
         pagination=pagination,
         users=users,
         priorities=ALERT_PRIORITIES,
@@ -90,6 +99,7 @@ def _alert_response(alert):
         "id": alert.id,
         "inspection_id": alert.inspection_id,
         "status": alert.status,
+        "kind": alert.kind,
         "response": alert.response,
         "priority": alert.priority,
         "severity": alert.severity,

@@ -231,6 +231,30 @@
     color: #b91c1c;
 }
 
+/* Marks whether a row is real defect work or a low-confidence review item.
+   Defect reads as an alert; review is deliberately muted so it does not
+   compete for attention with an actual crack. */
+.kind-badge {
+    display: inline-block;
+    margin-top: 0.25rem;
+    padding: 0.12rem 0.45rem;
+    border-radius: 20px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.kind-defect {
+    background: rgba(239, 68, 68, 0.12);
+    color: #b91c1c;
+}
+
+.kind-review {
+    background: rgba(100, 116, 139, 0.14);
+    color: #475569;
+}
+
 .severity-text,
 .owner-sub {
     display: block;

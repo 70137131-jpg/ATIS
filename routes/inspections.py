@@ -25,7 +25,13 @@ from flask import (
 )
 from PIL import Image, UnidentifiedImageError
 
-from atis_inference import classify_tyre_image
+from atis_inference import (
+    OUTCOME_NEEDS_REVIEW,
+    OUTCOME_SAFE,
+    OUTCOME_UNSAFE,
+    classify_tyre_image,
+    status_for_outcome,
+)
 from models import (
     Alert,
     Camera,
@@ -570,7 +576,18 @@ def _run_and_persist_inspection(
         _discard_upload(save_path)
         raise RuntimeError("AI model inference failed.") from exc
 
-    status = prediction["status"]
+    # Older callers may supply only the binary status. Derive the outcome the
+    # same way migration 0023 backfills historical rows, so a payload without
+    # the field lands on the identical verdict either way.
+    outcome = prediction.get("outcome")
+    if not outcome:
+        if prediction["status"] == "safe":
+            outcome = OUTCOME_SAFE
+        elif prediction.get("predicted_class") == "not_tyre" or prediction.get("low_confidence"):
+            outcome = OUTCOME_NEEDS_REVIEW
+        else:
+            outcome = OUTCOME_UNSAFE
+    status = status_for_outcome(outcome)
     confidence = prediction["confidence"]
     defects_list = prediction["defects"]
     predicted_class = prediction["predicted_class"]
@@ -597,6 +614,7 @@ def _run_and_persist_inspection(
         camera=camera,
         created_by_id=actor_id,
         status=status,
+        outcome=outcome,
         confidence=confidence,
         predicted_class=predicted_class,
         model_path=model_path,
@@ -634,8 +652,12 @@ def _run_and_persist_inspection(
         actor=actor,
         details={
             "status": status,
+            "outcome": outcome,
             "confidence": confidence,
             "predicted_class": predicted_class,
+            # What the classifier said before the tyre gate had its say; differs
+            # from predicted_class only when the gate overrode the model.
+            "classifier_class": prediction.get("classifier_class"),
             "defects": defects_list,
             "duplicate_of": duplicate_inspection.id if duplicate_inspection else None,
             "image_checksum": image_checksum,
@@ -648,10 +670,26 @@ def _run_and_persist_inspection(
         },
     )
 
-    if status == "unsafe" and predicted_class != "not_tyre":
+    # Alert routing follows the outcome, not the binary status:
+    #   unsafe        -> a defect alert (real crack evidence, including a gate
+    #                    rejection that overrode a 'cracked' call).
+    #   needs_review  -> a review alert. It shares the worklist so nothing is
+    #                    missed, but is tagged so it can be counted and
+    #                    filtered apart from real defects.
+    #   not_tyre      -> no alert, as before; an unworkable frame is not work.
+    #                    (A not-tyre frame whose classifier call was 'cracked'
+    #                    carries outcome=unsafe and so still alerts above.)
+    alert_kind = None
+    if outcome == OUTCOME_UNSAFE:
+        alert_kind = "defect"
+    elif outcome == OUTCOME_NEEDS_REVIEW and predicted_class != "not_tyre":
+        alert_kind = "review"
+
+    if alert_kind:
         alert = Alert(
             inspection_id=inspection.id,
             status="pending",
+            kind=alert_kind,
             created_at=datetime.now(timezone.utc),
         )
         db.session.add(alert)
@@ -661,7 +699,11 @@ def _run_and_persist_inspection(
             entity_type="alert",
             entity_id=alert.id,
             actor=actor,
-            details={"inspection_id": inspection.id, "source": "inspection_prediction"},
+            details={
+                "inspection_id": inspection.id,
+                "source": "inspection_prediction",
+                "kind": alert_kind,
+            },
         )
 
     db.session.commit()
@@ -669,6 +711,7 @@ def _run_and_persist_inspection(
     return {
         "inspection_id": inspection.id,
         "status": status,
+        "outcome": outcome,
         "confidence": confidence,
         "defects": defects_list,
         "bounding_boxes": bounding_boxes,
