@@ -31,6 +31,18 @@
                     <button class="tab" data-tab="all">All</button>
                 </div>
 
+                <!-- Kind filter. Independent of the status tabs above: a row is
+                     shown only when it matches both. Defect work and
+                     low-confidence review items share one queue so nothing is
+                     missed, but they must be separable at a glance. -->
+                <div class="alert-tabs alert-kind-tabs">
+                    <button class="tab active" data-kind="all">All work</button>
+                    <button class="tab" data-kind="defect">Defects <span class="tab-badge">{{ pending_defect_count
+                            }}</span></button>
+                    <button class="tab" data-kind="review">Review <span class="tab-badge">{{ pending_review_count
+                            }}</span></button>
+                </div>
+
                 <!-- Alerts Table -->
                 <div class="table-card">
                     <div class="table-section-header">
@@ -53,9 +65,11 @@
                             </thead>
                             <tbody id="alerts-tbody">
                                 {% for a in alerts %}
-                                <tr data-status="{{ a.status }}">
+                                <tr data-status="{{ a.status }}" data-kind="{{ a.kind }}">
                                     <td class="cell-time"><span class="time-main">{{ a.created_at.strftime('%I:%M %p')
                                             }}</span><span class="time-sub">{{ a.created_at.strftime('%b %d') }}</span>
+                                        <span class="kind-badge kind-{{ a.kind }}">{{ alert_kind_labels.get(a.kind,
+                                            a.kind) }}</span>
                                     </td>
                                     <td class="cell-location">
                                         <span
@@ -102,7 +116,7 @@
                                         {% endif %}
                                     </td>
                                 </tr>
-                                <tr class="alert-detail-row" data-status="{{ a.status }}">
+                                <tr class="alert-detail-row" data-status="{{ a.status }}" data-kind="{{ a.kind }}">
                                     <td colspan="9">
                                         <div class="alert-workflow-panel">
                                             <form action="{{ url_for('update_alert_details', alert_id=a.id) }}" method="POST" class="alert-details-form">

@@ -382,6 +382,65 @@ def test_not_tyre_prediction_is_stored_without_alert(auth_client, app, monkeypat
         assert Alert.query.filter_by(inspection_id=body["inspection_id"]).count() == 0
 
 
+def test_low_confidence_normal_raises_a_review_alert_not_a_defect(
+    auth_client, app, monkeypatch, tmp_path
+):
+    """The alert-fatigue split: a low-confidence normal shares the worklist with
+    real defects so nothing is missed, but is tagged `review` so it can be
+    counted and filtered apart from an actual crack."""
+    auth_client.application.config["UPLOAD_FOLDER"] = str(tmp_path)
+    monkeypatch.setattr(
+        inspection_routes,
+        "classify_tyre_image",
+        lambda *_a, **_k: {
+            "status": "unsafe",
+            "outcome": "needs_review",
+            "confidence": 52,
+            "defects": ["Low-confidence normal — manual review"],
+            "predicted_class": "normal",
+            "classifier_class": "normal",
+            "threshold": 60,
+            "low_confidence": True,
+            "model_path": "test",
+        },
+    )
+
+    resp = auth_client.post(
+        "/predict",
+        data={"image": (make_jpeg(), "unsure.jpg"), "location": "Test Gate"},
+        content_type="multipart/form-data",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    # The binary status is unchanged, so reports and metrics keep their meaning.
+    assert body["status"] == "unsafe"
+    assert body["outcome"] == "needs_review"
+
+    with app.app_context():
+        inspection = db.session.get(Inspection, body["inspection_id"])
+        assert inspection.status == "unsafe"
+        assert inspection.outcome == "needs_review"
+
+        alerts = Alert.query.filter_by(inspection_id=body["inspection_id"]).all()
+        assert len(alerts) == 1
+        assert alerts[0].kind == "review"
+
+
+def test_cracked_prediction_raises_a_defect_alert(auth_client, app, monkeypatch, tmp_path):
+    resp = _post_predict(
+        auth_client, monkeypatch, tmp_path, status="unsafe", defects=["Cracking"]
+    )
+    body = resp.get_json()
+
+    with app.app_context():
+        inspection = db.session.get(Inspection, body["inspection_id"])
+        assert inspection.outcome == "unsafe"
+        alerts = Alert.query.filter_by(inspection_id=body["inspection_id"]).all()
+        assert len(alerts) == 1
+        assert alerts[0].kind == "defect"
+
+
 def test_gate_overriding_a_cracked_call_still_raises_an_alert(
     auth_client, app, monkeypatch, tmp_path
 ):
@@ -397,6 +456,8 @@ def test_gate_overriding_a_cracked_call_still_raises_an_alert(
         "classify_tyre_image",
         lambda *_a, **_k: {
             "status": "unsafe",
+            # The gate keeps a defect outcome when it overrides a cracked call.
+            "outcome": "unsafe",
             "confidence": 0,
             "defects": ["Not a tyre"],
             "predicted_class": "not_tyre",
@@ -421,6 +482,8 @@ def test_gate_overriding_a_cracked_call_still_raises_an_alert(
         alerts = Alert.query.filter_by(inspection_id=body["inspection_id"]).all()
         assert len(alerts) == 1
         assert alerts[0].status == "pending"
+        # It is real defect work, not a review item, despite the not_tyre class.
+        assert alerts[0].kind == "defect"
 
 
 def test_unsafe_prediction_persists_and_renders_boxes(auth_client, app, monkeypatch, tmp_path):

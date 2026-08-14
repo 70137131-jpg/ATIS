@@ -112,10 +112,46 @@ def test_low_confidence_normal_is_flagged_for_review(monkeypatch):
     _use(monkeypatch, top1=0, conf=0.52, probs=[0.52, 0.48])  # below 0.60 default
     result = atis_inference.classify_tyre_frame(FRAME)
 
+    # Still withheld from passing (fail-safe), but it is not crack evidence.
     assert result["status"] == "unsafe"
+    assert result["outcome"] == "needs_review"
     assert result["low_confidence"] is True
     assert result["defects"] == ["Low-confidence normal — manual review"]
     assert result["boxes"] == []
+
+
+def test_outcome_splits_three_ways_while_status_stays_binary(monkeypatch):
+    """`outcome` carries the real distinction; `status` keeps its old meaning.
+
+    Reports, metrics and dashboards read `status`, so its safe/unsafe values
+    must be exactly what they were before the split.
+    """
+    _use(monkeypatch, top1=0, conf=0.95, probs=[0.95, 0.05])
+    confident_normal = atis_inference.classify_tyre_frame(FRAME)
+    assert (confident_normal["status"], confident_normal["outcome"]) == ("safe", "safe")
+
+    _use(monkeypatch, top1=0, conf=0.52, probs=[0.52, 0.48])
+    unsure_normal = atis_inference.classify_tyre_frame(FRAME)
+    assert (unsure_normal["status"], unsure_normal["outcome"]) == ("unsafe", "needs_review")
+
+    _use(monkeypatch, top1=1, conf=0.90, probs=[0.10, 0.90], localize=lambda *_a, **_k: [])
+    cracked = atis_inference.classify_tyre_frame(FRAME)
+    assert (cracked["status"], cracked["outcome"]) == ("unsafe", "unsafe")
+
+
+def test_unexpected_class_is_review_not_a_defect(monkeypatch):
+    """An unrecognised class is the model failing to answer, not a crack."""
+    monkeypatch.setattr(
+        atis_inference, "load_classifier",
+        lambda *_a, **_k: _classifier({0: "sidewall_bulge"}, 0, 0.99, [0.99]),
+    )
+    monkeypatch.setattr(atis_inference, "find_model_path", lambda: None)
+    monkeypatch.setattr(atis_inference, "_non_tyre_reason", lambda *_a, **_k: None)
+
+    result = atis_inference.classify_tyre_frame(FRAME)
+    assert result["status"] == "unsafe"  # never passed
+    assert result["outcome"] == "needs_review"
+    assert result["defects"] == ["Unexpected class: sidewall_bulge"]
 
 
 def test_classifier_parser_rejects_empty_ultralytics_results(monkeypatch):
@@ -156,6 +192,7 @@ def test_blank_frame_is_reported_as_not_tyre(monkeypatch):
     assert result["predicted_class"] == "not_tyre"
     assert result["defects"] == ["Not a tyre"]
     assert result["classifier_class"] == "normal"
+    assert result["outcome"] == "needs_review"
 
 
 def test_non_tyre_frame_called_cracked_is_still_gated(monkeypatch):
@@ -171,8 +208,10 @@ def test_non_tyre_frame_called_cracked_is_still_gated(monkeypatch):
     assert result["predicted_class"] == "not_tyre"
     assert result["defects"] == ["Not a tyre"]
     assert result["boxes"] == []
-    # The overridden classifier call is preserved so the conflict stays visible.
+    # The overridden classifier call is preserved so the conflict stays visible,
+    # and it keeps a defect outcome — the gate may have misjudged a real crack.
     assert result["classifier_class"] == "cracked"
+    assert result["outcome"] == "unsafe"
 
 
 def test_gate_does_not_run_when_disabled(monkeypatch):

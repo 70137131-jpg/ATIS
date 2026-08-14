@@ -77,6 +77,12 @@ class Inspection(db.Model):
     location = db.Column(db.String(200), nullable=False)     # e.g. "Main Gate Entrance"
     camera = db.Column(db.String(20), nullable=True)         # Camera ID
     status = db.Column(db.String(10), nullable=False, index=True)        # "safe" or "unsafe"
+    # Three-way verdict behind the binary status above. "safe" | "unsafe" |
+    # "needs_review". status stays binary so existing reports, metrics and
+    # dashboards keep their meaning; outcome is what decides how a result is
+    # worked (defect alert vs review item). See atis_inference.OUTCOME_*.
+    outcome = db.Column(db.String(20), nullable=False, default="unsafe",
+                        server_default="unsafe", index=True)
     confidence = db.Column(db.Integer, nullable=False)       # AI confidence score (0-100)
     predicted_class = db.Column(db.String(80), nullable=True)
     model_path = db.Column(db.String(300), nullable=True)
@@ -298,6 +304,13 @@ class Alert(db.Model):
     
     # Status of the alert workflow: pending -> acknowledged -> resolved
     status = db.Column(db.String(20), nullable=False, default="pending", index=True)
+
+    # What kind of work this alert represents: "defect" (positive evidence of a
+    # crack) or "review" (the model could not call the frame). Both share one
+    # operator worklist so nothing is missed, but they are counted and filtered
+    # apart so low-confidence noise cannot bury real defects.
+    kind = db.Column(db.String(20), nullable=False, default="defect",
+                     server_default="defect", index=True)
     
     # Optional notes added by the operator
     response = db.Column(db.String(200), nullable=True)

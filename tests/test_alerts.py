@@ -19,6 +19,75 @@ def _create_pending_alert(app):
         return alert.id
 
 
+def _create_alert(app, *, kind, outcome, defects):
+    with app.app_context():
+        inspection = Inspection(
+            location="Test Gate",
+            status="unsafe",
+            outcome=outcome,
+            confidence=91,
+            defects=defects,
+        )
+        db.session.add(inspection)
+        db.session.flush()
+        alert = Alert(inspection_id=inspection.id, status="pending", kind=kind)
+        db.session.add(alert)
+        db.session.commit()
+        return alert.id
+
+
+def test_alerts_page_separates_defect_and_review_work(auth_client, app):
+    """The page must render both kinds, badge each row, and count them apart."""
+    _create_alert(app, kind="defect", outcome="unsafe", defects="Cracking")
+    _create_alert(
+        app, kind="review", outcome="needs_review",
+        defects="Low-confidence normal — manual review",
+    )
+
+    resp = auth_client.get("/alerts")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+
+    # Both rows are tagged so the two kinds are separable at a glance.
+    assert 'data-kind="defect"' in body
+    assert 'data-kind="review"' in body
+    assert "kind-badge kind-defect" in body
+    assert "kind-badge kind-review" in body
+    # And the kind filter is present for narrowing the queue.
+    assert 'data-kind="all"' in body
+
+
+def test_alerts_page_counts_defects_apart_from_review_items(auth_client, app):
+    """A pile of review items must not disguise how many real defects wait."""
+    _create_alert(app, kind="defect", outcome="unsafe", defects="Cracking")
+    for _ in range(3):
+        _create_alert(
+            app, kind="review", outcome="needs_review",
+            defects="Low-confidence normal — manual review",
+        )
+
+    with app.app_context():
+        assert Alert.query.filter_by(status="pending", kind="defect").count() == 1
+        assert Alert.query.filter_by(status="pending", kind="review").count() == 3
+
+    resp = auth_client.get("/alerts")
+    assert resp.status_code == 200
+
+
+def test_alert_kind_defaults_to_defect(app):
+    """Existing code paths that create an Alert without a kind stay defect work."""
+    with app.app_context():
+        inspection = Inspection(
+            location="Test Gate", status="unsafe", confidence=91, defects="Cracking"
+        )
+        db.session.add(inspection)
+        db.session.flush()
+        alert = Alert(inspection_id=inspection.id, status="pending")
+        db.session.add(alert)
+        db.session.commit()
+        assert alert.kind == "defect"
+
+
 def test_acknowledge_alert_updates_status(auth_client, app):
     alert_id = _create_pending_alert(app)
 

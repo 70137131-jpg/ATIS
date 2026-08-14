@@ -47,6 +47,25 @@ OBJECT_MODEL_CANDIDATES = (
 # mapping, the localizer trigger, and the alert rule in routes/ all agree.
 CRACKED_CLASS_NAMES = {"crack", "cracked", "cracking"}
 
+# Three-way verdict. `status` stays the binary safe/unsafe the schema, reports
+# and metrics have always used; `outcome` is the finer distinction that decides
+# how a result is worked:
+#   safe          — passed.
+#   unsafe        — positive evidence of a defect. Raises a defect alert.
+#   needs_review  — the system cannot vouch for this frame (low-confidence
+#                   normal, an unexpected class, a non-tyre image). Fail-safe,
+#                   so it is NOT passed, but it is not a crack either and must
+#                   not be worked as one — that conflation is what buries real
+#                   defects under low-confidence noise.
+OUTCOME_SAFE = "safe"
+OUTCOME_UNSAFE = "unsafe"
+OUTCOME_NEEDS_REVIEW = "needs_review"
+
+
+def status_for_outcome(outcome: str) -> str:
+    """Collapse a three-way outcome to the binary status the schema stores."""
+    return "safe" if outcome == OUTCOME_SAFE else "unsafe"
+
 VEHICLE_CLASSES = {"bicycle", "car", "motorcycle", "bus", "truck"}
 NON_TYRE_OBJECT_CLASSES = {
     "person", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear",
@@ -238,26 +257,29 @@ def _class_name(names: Any, class_id: int) -> str:
     return str(class_id)
 
 
-def _status_for_class(
+def _outcome_for_class(
     predicted_class: str, confidence: float, threshold: float
 ) -> tuple[str, list[str]]:
-    """Map a predicted class to a safety status using an asymmetric, fail-safe
-    confidence gate: a tire is only passed as 'safe' when the model is confident
-    it is 'normal'. ``confidence`` is the top-1 probability as a fraction (0-1)."""
+    """Map a predicted class to a three-way outcome using an asymmetric,
+    fail-safe confidence gate: a tire is only passed as 'safe' when the model is
+    confident it is 'normal'. ``confidence`` is the top-1 probability as a
+    fraction (0-1). Nothing here returns 'safe' on doubt — doubt becomes
+    ``needs_review``, which is still withheld from passing."""
     normalized = predicted_class.strip().lower()
 
     # A cracked tire is unsafe regardless of confidence — never gated.
     if normalized in CRACKED_CLASS_NAMES:
-        return "unsafe", ["Cracking"]
+        return OUTCOME_UNSAFE, ["Cracking"]
 
     if normalized == "normal":
         if confidence >= threshold:
-            return "safe", []
-        # Low-confidence 'normal' is not waved through; flag for manual review.
-        return "unsafe", ["Low-confidence normal — manual review"]
+            return OUTCOME_SAFE, []
+        # Low-confidence 'normal' is not waved through, but it is not evidence
+        # of a crack either — it is a frame the model could not call.
+        return OUTCOME_NEEDS_REVIEW, ["Low-confidence normal — manual review"]
 
     # Unknown classifier output should be reviewed instead of silently passed.
-    return "unsafe", [f"Unexpected class: {predicted_class}"]
+    return OUTCOME_NEEDS_REVIEW, [f"Unexpected class: {predicted_class}"]
 
 
 def _frame_array(model_input: Any) -> Any | None:
@@ -465,8 +487,14 @@ def _not_tyre_result(
     normal" apart from "the model called this cracked and the gate disagreed" —
     the latter is a conflict a human still needs to see.
     """
+    # A rejected frame is normally just unworkable input, not a defect. The
+    # exception is that conflict: the gate overrode a 'cracked' call, which may
+    # be a real crack the gate misjudged, so it stays a defect outcome.
+    overrode_crack = (classifier_class or "").strip().lower() in CRACKED_CLASS_NAMES
+    outcome = OUTCOME_UNSAFE if overrode_crack else OUTCOME_NEEDS_REVIEW
     return {
-        "status": "unsafe",
+        "status": status_for_outcome(outcome),
+        "outcome": outcome,
         "confidence": 0,
         "defects": [reason or "Not a tyre"],
         "predicted_class": "not_tyre",
@@ -515,20 +543,23 @@ def _classify_model_input(
             reason, model_path=resolved_model, classifier_class=predicted_class
         )
 
-    status, defects = _status_for_class(predicted_class, conf_fraction, threshold)
+    outcome, defects = _outcome_for_class(predicted_class, conf_fraction, threshold)
 
     # Localize the crack so the overlay box lands on the defect, not the frame.
     is_cracked = predicted_class.strip().lower() in CRACKED_CLASS_NAMES
     boxes = _localize_cracks(model_input, confidence) if is_cracked else []
 
     return {
-        "status": status,
+        "status": status_for_outcome(outcome),
+        "outcome": outcome,
         "confidence": confidence,
         "defects": defects,
         "predicted_class": predicted_class,
         "classifier_class": predicted_class,
         "threshold": round(threshold * 100),
-        "low_confidence": status == "unsafe" and predicted_class.strip().lower() == "normal",
+        "low_confidence": (
+            outcome == OUTCOME_NEEDS_REVIEW and predicted_class.strip().lower() == "normal"
+        ),
         "boxes": boxes,
         "bounding_boxes": boxes,
         "model_path": resolved_model,
