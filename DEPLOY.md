@@ -177,8 +177,10 @@ Notes:
   builds):** the remote builder must support Git LFS, or it will build from
   pointer stubs — and our Dockerfile guard will fail the build. Prefer pushing a
   prebuilt image, or confirm the platform fetches LFS objects.
-- **Hugging Face Spaces (Docker):** Git LFS is native; the weights come down with
-  the repo. **Safe.**
+- **Hugging Face Spaces (Docker):** LFS is *not* a usable path here any more. HF
+  rejects pushes whose history carries binaries outside Xet storage, so the
+  Space gets an orphan snapshot with the weights as base64 text instead. See
+  the Spaces section below. **Needs the snapshot workflow.**
 
 ## Persistent Data
 
@@ -192,19 +194,50 @@ Notes:
 
 ## Deploy to Hugging Face Spaces (Docker) — recommended for the demo
 
-HF Spaces builds the Dockerfile for you, has Git LFS native (weights just work),
-and the free CPU tier has 16 GB RAM (torch fits easily). The `README.md`
-frontmatter (`sdk: docker`, `app_port: 8080`) tells HF how to build/route it.
+HF Spaces builds the Dockerfile for you and the free CPU tier has 16 GB RAM
+(torch fits easily). The `README.md` frontmatter (`sdk: docker`, `app_port:
+8080`) tells HF how to build/route it.
+
+> **You cannot push `main` to a Space.** HF's pre-receive hook rejects any push
+> whose **history** contains binary blobs outside [Xet storage](https://huggingface.co/docs/hub/xet),
+> and this repo's history has `.pt` weights, training-run PNG/JPGs and test
+> fixtures. Deleting them in the tip commit does **not** help — the hook scans
+> every commit being pushed, so a branch off `main` is rejected for files that
+> only exist in its ancestors. Spaces therefore receive a **parentless (orphan)
+> snapshot that contains no binaries at all**, with the runtime weights carried
+> as base64 *text* and decoded at build time.
 
 1. Create a free account at https://huggingface.co, then **New Space** →
    SDK **Docker** → choose blank/empty template. Note the git URL:
    `https://huggingface.co/spaces/<user>/<space>`.
-2. Push this repo to the Space (Git LFS uploads the weights automatically):
+2. Build and push the binary-free orphan snapshot. Authenticate with an HF
+   **access token** (Settings → Access Tokens, "write"):
    ```bash
    git remote add space https://huggingface.co/spaces/<user>/<space>
-   git push space main:main
+
+   # Encode the two runtime models as text (line-wrapped, like the originals).
+   mkdir -p deploy_artifacts
+   base64 -b 76 -i runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt \
+                -o deploy_artifacts/best.pt.b64
+   base64 -b 76 -i yolo26n.pt -o deploy_artifacts/yolo26n.pt.b64   # GNU: base64 -w 76 <in >out
+
+   # Strip every binary, then swap the Dockerfile's weight step for the base64
+   # decode (see the space-deploy-orphan-* branch for the exact block).
+   git checkout -b space-snapshot main
+   git rm -q 'runs/classify/runs/classify/ATIS_Project/tyre_safety_model/*.png' \
+             'runs/classify/runs/classify/ATIS_Project/tyre_safety_model/*.jpg' \
+             'runs/classify/runs/classify/ATIS_Project/tyre_safety_model/weights/best.pt' \
+             'tests/fixtures/anpr_samples/*.png' yolo11n-cls.pt yolo26n.pt
+   git add deploy_artifacts Dockerfile && git commit -m "strip binaries for Space"
+
+   # Drop the history, then push the single parentless commit.
+   git checkout --orphan space-snapshot-orphan
+   git commit -m "ATIS Space deploy — snapshot of main"
+   git push space HEAD:main --force
    ```
-   Authenticate with an HF **access token** (Settings → Access Tokens, "write").
+   Verify before pushing — `git ls-files | grep -iE '\.(pt|png|jpg|jpeg)$'` must
+   return nothing, and `base64 -d -i deploy_artifacts/best.pt.b64 | shasum -a 256`
+   must match `ATIS_CLASSIFIER_SHA256` in the Dockerfile.
 3. In the Space UI → **Settings → Variables and secrets**, set:
    | Name | Kind | Value |
    |------|------|-------|
