@@ -31,7 +31,10 @@
     --white: #ffffff;
     --text-primary: #17251d;
     --text-secondary: #526057;
-    --text-muted: #7b8a80;
+    /* 4.83:1 on --bg. The lighter #7b8a80 this replaces sits at 3.21:1 and
+       fails WCAG AA for normal text; muted text is used at small sizes for
+       timestamps and table sub-labels, so it needs the darker step. */
+    --text-muted: #5e6d63;
     --border: #dbe3dd;
 
     /* Status Colors */
