@@ -64,10 +64,23 @@ mapping is gated by an **asymmetric, fail-safe confidence threshold**
 passed as `safe` **only** when predicted `normal` *and* top-1 confidence ≥
 threshold. A `cracked` prediction is `unsafe` at any confidence; a low-confidence
 `normal` is downgraded to `unsafe` ("Low-confidence normal — manual review");
-**any unexpected class is also `unsafe`**. A best-effort non-tyre gate
-(contrast/edge-density, env `ATIS_FLAT_*`, optional COCO model) rejects obvious
-non-tyre/blank frames. The model is a 2-class softmax, so the winning confidence
-is always ≥ 0.50 — a threshold only bites above that.
+**any unexpected class is also `unsafe`**. The model is a 2-class softmax, so the
+winning confidence is always ≥ 0.50 — a threshold only bites above that.
+
+**The non-tyre gate runs before the verdict is interpreted, in both directions**
+(contrast/edge-density, env `ATIS_FLAT_*`, optional COCO model). It is not just a
+sanity check on `safe`: a wall or a blank frame the classifier happens to call
+`cracked` is not a cracked tyre either. A gated result carries
+`classifier_class` — what the model said before the gate overrode it — and when
+the gate overrides a **`cracked`** call, `routes/inspections.py` still raises an
+`Alert`, because that disagreement may be a real crack the gate misjudged.
+
+**The cached models are shared across threads** (gunicorn runs 1 worker ×
+`GUNICORN_THREADS`, plus the `ATIS_INFERENCE_WORKERS` async pool). Ultralytics
+mutates one internal predictor per model, so **every model call and every read
+off its `Results` must hold `_predict_lock`** (an `RLock`); `_model_load_lock`
+guards lazy construction. Do NOT call a cached model outside the lock — two
+overlapping predicts can hand one request another's verdict.
 
 **[app.py](app.py) owns the Flask app factory** (`create_app`) and extension
 initialization. Routes are split under `routes/`

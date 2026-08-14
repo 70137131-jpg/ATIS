@@ -25,7 +25,7 @@ from flask import (
 )
 from PIL import Image, UnidentifiedImageError
 
-from atis_inference import classify_tyre_image
+from atis_inference import CRACKED_CLASS_NAMES, classify_tyre_image
 from models import (
     Alert,
     Camera,
@@ -636,6 +636,9 @@ def _run_and_persist_inspection(
             "status": status,
             "confidence": confidence,
             "predicted_class": predicted_class,
+            # What the classifier said before the tyre gate had its say; differs
+            # from predicted_class only when the gate overrode the model.
+            "classifier_class": prediction.get("classifier_class"),
             "defects": defects_list,
             "duplicate_of": duplicate_inspection.id if duplicate_inspection else None,
             "image_checksum": image_checksum,
@@ -648,7 +651,16 @@ def _run_and_persist_inspection(
         },
     )
 
-    if status == "unsafe" and predicted_class != "not_tyre":
+    # A not-tyre frame does not raise a defect alert — there is no tyre to act
+    # on. The exception is a conflict: the gate rejected a frame the classifier
+    # had called cracked. That could be a genuinely cracked tyre the gate
+    # misjudged (a dark or low-contrast photo), and silently dropping it would
+    # turn the gate into a source of missed defects, so it stays on the queue.
+    gate_overrode_crack = (
+        predicted_class == "not_tyre"
+        and (prediction.get("classifier_class") or "").strip().lower() in CRACKED_CLASS_NAMES
+    )
+    if status == "unsafe" and (predicted_class != "not_tyre" or gate_overrode_crack):
         alert = Alert(
             inspection_id=inspection.id,
             status="pending",

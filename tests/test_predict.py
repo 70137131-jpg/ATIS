@@ -382,6 +382,47 @@ def test_not_tyre_prediction_is_stored_without_alert(auth_client, app, monkeypat
         assert Alert.query.filter_by(inspection_id=body["inspection_id"]).count() == 0
 
 
+def test_gate_overriding_a_cracked_call_still_raises_an_alert(
+    auth_client, app, monkeypatch, tmp_path
+):
+    """A not-tyre verdict that overrode a 'cracked' classifier call is a conflict.
+
+    It could be a genuinely cracked tyre the gate misjudged (a dark or
+    low-contrast photo), so it must not be dropped the way a plain not-tyre
+    frame is — otherwise the gate becomes a source of missed defects.
+    """
+    auth_client.application.config["UPLOAD_FOLDER"] = str(tmp_path)
+    monkeypatch.setattr(
+        inspection_routes,
+        "classify_tyre_image",
+        lambda *_a, **_k: {
+            "status": "unsafe",
+            "confidence": 0,
+            "defects": ["Not a tyre"],
+            "predicted_class": "not_tyre",
+            "classifier_class": "cracked",
+            "threshold": 60,
+            "low_confidence": False,
+            "model_path": "test",
+        },
+    )
+
+    resp = auth_client.post(
+        "/predict",
+        data={"image": (make_jpeg(), "conflict.jpg"), "location": "Live Camera"},
+        content_type="multipart/form-data",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["predicted_class"] == "not_tyre"
+
+    with app.app_context():
+        alerts = Alert.query.filter_by(inspection_id=body["inspection_id"]).all()
+        assert len(alerts) == 1
+        assert alerts[0].status == "pending"
+
+
 def test_unsafe_prediction_persists_and_renders_boxes(auth_client, app, monkeypatch, tmp_path):
     resp = _post_predict(
         auth_client, monkeypatch, tmp_path, status="unsafe", defects=["Crack"]

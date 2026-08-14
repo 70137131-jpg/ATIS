@@ -91,6 +91,7 @@
     "production_path": "classifier_plus_heuristic_localizer",
     "safe_decision": "safe only when predicted class is normal and top-1 confidence is greater than or equal to ATIS_CONF_THRESHOLD",
     "unsafe_decision": "cracked/crack/cracking predictions are unsafe at any confidence; low-confidence normal is unsafe for manual review",
+    "tyre_gate_ordering": "The non-tyre gate runs before the verdict is interpreted and applies to every prediction, not only to safe ones. A gated result reports predicted_class=not_tyre and preserves the overridden call in classifier_class. When the gate overrides a cracked call the inspection still raises an alert, so a gate misjudgement cannot become a missed defect.",
     "default_ATIS_CONF_THRESHOLD": 0.6,
     "default_ATIS_OBJECT_CONF_THRESHOLD": 0.35,
     "tyre_gate_default": true,
